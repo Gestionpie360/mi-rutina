@@ -1986,16 +1986,14 @@ let fragmentoPendienteTimeout = null;
 
 let huboResultado = false; // si termina de escuchar sin esto, Chrome no devolvió nada
 let huboError = false;
+// Intención del usuario (prendido/apagado), separada del estado técnico del
+// reconocedor — se cambia SOLO al tocar 🎙️, así el botón siempre apaga de
+// verdad sin importar qué esté haciendo el reconocedor en ese instante.
+let quiereEscuchar = false;
 
 if (SpeechRecognitionCtor) {
   recognizer = new SpeechRecognitionCtor();
   recognizer.lang = "es-419";
-  // Modo continuo: tocas 🎙️ UNA vez y queda escuchando (punteo rojo) durante
-  // toda la frase, con pausas y todo — no se corta apenas detecta un
-  // silencio como pasaba en modo por-frase. Se apaga SOLO cuando tú tocas
-  // 🎙️ de nuevo o cuando Chrome termina la sesión por su cuenta — a
-  // diferencia del primer intento con modo continuo, aquí NO se reinicia
-  // solo, que era justo lo que lo dejaba pegado sin apagarse nunca.
   recognizer.continuous = true;
   recognizer.interimResults = false;
   recognizer.maxAlternatives = 1;
@@ -2008,9 +2006,14 @@ if (SpeechRecognitionCtor) {
   });
   recognizer.addEventListener("end", () => {
     escuchando = false;
+    // En Android, el modo continuo de Chrome a veces "se queda sordo" tras
+    // reconocer una frase, sin avisar nada — por eso cada frase reconocida
+    // reinicia la escucha (más abajo, en "result"). Si Chrome cerró la
+    // sesión sola y el usuario no pidió apagar el mic, se retoma acá.
+    if (quiereEscuchar) {
+      try { recognizer.start(); return; } catch (err) { /* sigue abajo */ }
+    }
     micBtn.classList.remove("listening");
-    // Antes esto quedaba en silencio total si Chrome no alcanzaba a devolver
-    // texto (se veía "no pasa nada"). Ahora siempre se avisa algo.
     if (!huboResultado && !huboError) {
       toast("🎙️ No se detectó ninguna frase. Revisa el volumen/micrófono e inténtalo de nuevo.");
     }
@@ -2018,6 +2021,9 @@ if (SpeechRecognitionCtor) {
   recognizer.addEventListener("error", (e) => {
     escuchando = false;
     huboError = true;
+    // "no-speech" en medio de una escucha continua es normal (silencio entre
+    // una frase y la siguiente) — "end" llega enseguida y reinicia solo.
+    if (e.error === "no-speech" && quiereEscuchar) return;
     micBtn.classList.remove("listening");
     toast(`🎙️ No se pudo escuchar (${e.error === "not-allowed" ? "revisa el permiso de micrófono" : e.error})`);
   });
@@ -2050,14 +2056,22 @@ if (SpeechRecognitionCtor) {
         fragmentoPendienteTimeout = setTimeout(() => { fragmentoPendiente = ""; }, 6000);
       }
     }
+    // Refresca la escucha después de cada frase reconocida — evita que la
+    // siguiente frase se pierda en silencio (ver nota arriba en "end").
+    if (quiereEscuchar) recognizer.stop();
   });
 
   micBtn.addEventListener("click", async () => {
-    if (escuchando) { recognizer.stop(); return; }
+    if (quiereEscuchar) {
+      quiereEscuchar = false;
+      recognizer.stop();
+      return;
+    }
     if (!localStorage.getItem(LS_VOZ_AYUDA_VISTA)) {
       await modalAyudaVoz();
       localStorage.setItem(LS_VOZ_AYUDA_VISTA, "1");
     }
+    quiereEscuchar = true;
     try { recognizer.start(); } catch (err) { /* ya estaba escuchando */ }
   });
 } else {
