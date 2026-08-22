@@ -1080,6 +1080,25 @@ function bloquesActuales() {
   const dia = getDay(routine, entrenoActual.dayId);
   return agruparPorBloque(dia.ejercicios);
 }
+// ¿Todos los ejercicios del bloque tienen reps y kg cargados para esta ronda?
+function rondaCompleta(bloque, idx) {
+  return bloque.ejercicios.every((e) => {
+    const s = entrenoActual.log[e.id][idx];
+    return s && s.reps !== "" && s.kg !== "";
+  });
+}
+// Primera ronda que quedó a medias (algún ejercicio con datos y otro sin
+// ellos) — se usa para no dejar descansar hasta terminarla.
+function primeraRondaIncompleta(bloque) {
+  const maxRondas = Math.max(...bloque.ejercicios.map((e) => entrenoActual.log[e.id].length));
+  for (let i = 0; i < maxRondas; i++) {
+    const estados = bloque.ejercicios.map((e) => entrenoActual.log[e.id][i]).filter(Boolean);
+    const algunoLleno = estados.some((s) => s.reps !== "" || s.kg !== "");
+    const todosLlenos = estados.every((s) => s.reps !== "" && s.kg !== "");
+    if (algunoLleno && !todosLlenos) return i;
+  }
+  return null;
+}
 
 function renderSesionActiva() {
   const cont = document.getElementById("entrenarSesion");
@@ -1147,7 +1166,7 @@ function renderSesionActiva() {
                   return `<td><input inputmode="numeric" placeholder="reps" list="dlReps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
                   <td><input inputmode="decimal" placeholder="kg" list="dlKg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
                 }).join("")}
-                <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" title="Iniciar descanso del bloque">⏱️</button></td>
+                <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" data-timer-idx="${i}" title="Iniciar descanso del bloque">⏱️</button></td>
               </tr>`).join("")}
           </tbody>
         </table>
@@ -1188,6 +1207,12 @@ function renderSesionActiva() {
   });
   cont.querySelectorAll("[data-timer-block]").forEach((btn) => {
     btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.timerIdx, 10);
+      const bloqueDelBoton = bloques.find((b) => b.key === btn.dataset.timerBlock);
+      if (bloqueDelBoton && !rondaCompleta(bloqueDelBoton, idx)) {
+        toast(`⏱️ Completa reps y kg de la S${idx + 1} en todos los ejercicios del bloque antes de descansar`);
+        return;
+      }
       bloqueActivoKey = btn.dataset.timerBlock;
       resaltarBloqueActivo();
       startTimer(descansoBloque(dia, btn.dataset.timerBlock));
@@ -1788,6 +1813,15 @@ function procesarComandoVoz(transcriptOriginal) {
   if (/\bdescans/.test(t)) {
     if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
     showTab("entrenar");
+    const bloques = bloquesActuales();
+    const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
+    if (bloque) {
+      const idxIncompleta = primeraRondaIncompleta(bloque);
+      if (idxIncompleta != null) {
+        toast(`🎙️ Te falta completar la S${idxIncompleta + 1} en todos los ejercicios antes de descansar`);
+        return;
+      }
+    }
     const routine = getRoutine(entrenoActual.routineId);
     const dia = getDay(routine, entrenoActual.dayId);
     startTimer(descansoBloque(dia, bloqueActivoKey));
@@ -1860,42 +1894,59 @@ document.getElementById("vozPanelClose").addEventListener("click", () => {
 });
 let recognizer = null;
 let escuchando = false;
+let detenidoAPropósito = false; // true solo cuando el usuario tocó 🎙️ para apagarlo
 
 if (SpeechRecognitionCtor) {
   recognizer = new SpeechRecognitionCtor();
   recognizer.lang = "es-CL";
-  recognizer.continuous = false;
+  // Modo continuo: tocas 🎙️ UNA vez y queda "en línea" escuchando frase tras
+  // frase (se nota por el punteo rojo) — nada de tocar-hablar-esperar-tocar
+  // por cada comando. Se apaga tocando 🎙️ de nuevo.
+  recognizer.continuous = true;
   recognizer.interimResults = false;
   recognizer.maxAlternatives = 1;
 
   recognizer.addEventListener("start", () => { escuchando = true; micBtn.classList.add("listening"); });
-  recognizer.addEventListener("end", () => { escuchando = false; micBtn.classList.remove("listening"); });
-  recognizer.addEventListener("error", () => {
+  recognizer.addEventListener("end", () => {
+    escuchando = false;
+    micBtn.classList.remove("listening");
+    // Chrome a veces corta el modo continuo solo (silencio largo, límite de
+    // tiempo). Si el usuario no lo apagó él mismo, se reanuda solo.
+    if (!detenidoAPropósito) {
+      try { recognizer.start(); } catch (err) { /* ya se está reiniciando */ }
+    }
+  });
+  recognizer.addEventListener("error", (e) => {
+    if (e.error === "no-speech" || e.error === "aborted") return; // normal en modo continuo, no es una falla real
     escuchando = false;
     micBtn.classList.remove("listening");
     toast("🎙️ No se pudo escuchar (revisa el permiso de micrófono)");
   });
   recognizer.addEventListener("result", (e) => {
-    const transcript = e.results[0][0].transcript;
-    const panel = document.getElementById("vozPanel");
-    const escuche = document.getElementById("vozEscuche");
-    const entendi = document.getElementById("vozEntendi");
-    escuche.textContent = `"${transcript}"`;
-    entendi.textContent = "…";
-    panel.hidden = false;
-    try {
-      procesarComandoVoz(transcript);
-    } catch (err) {
-      toast(`🎙️ No pude procesar "${transcript}" (${err.message})`);
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (!e.results[i].isFinal) continue;
+      const transcript = e.results[i][0].transcript;
+      const panel = document.getElementById("vozPanel");
+      const escuche = document.getElementById("vozEscuche");
+      const entendi = document.getElementById("vozEntendi");
+      escuche.textContent = `"${transcript}"`;
+      entendi.textContent = "…";
+      panel.hidden = false;
+      try {
+        procesarComandoVoz(transcript);
+      } catch (err) {
+        toast(`🎙️ No pude procesar "${transcript}" (${err.message})`);
+      }
     }
   });
 
   micBtn.addEventListener("click", async () => {
-    if (escuchando) { recognizer.stop(); return; }
+    if (escuchando) { detenidoAPropósito = true; recognizer.stop(); return; }
     if (!localStorage.getItem(LS_VOZ_AYUDA_VISTA)) {
       await modalAyudaVoz();
       localStorage.setItem(LS_VOZ_AYUDA_VISTA, "1");
     }
+    detenidoAPropósito = false;
     try { recognizer.start(); } catch (err) { /* ya estaba escuchando */ }
   });
 } else {
