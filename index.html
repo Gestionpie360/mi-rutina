@@ -341,6 +341,19 @@ textarea { resize: vertical; min-height: 60px; }
 .tabla-ayuda-voz td { padding: 7px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .tabla-ayuda-voz td:first-child { white-space: nowrap; color: var(--accent); font-weight: 700; padding-right: 10px; }
 
+.voz-panel {
+  position: fixed; left: 16px; right: 16px; bottom: 150px; z-index: 45;
+  max-width: 380px; margin: 0 auto;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px;
+  padding: 10px 34px 10px 14px; box-shadow: var(--shadow);
+}
+@media (min-width: 760px) { .voz-panel { left: auto; right: 84px; bottom: 24px; } }
+.voz-panel-close { position: absolute; top: 4px; right: 4px; }
+.voz-panel-label { font-size: .68rem; text-transform: uppercase; color: var(--text-dim); font-weight: 700; letter-spacing: .04em; margin-top: 6px; }
+.voz-panel-label:first-of-type { margin-top: 0; }
+.voz-panel-transcript { font-size: .92rem; font-style: italic; }
+.voz-panel-resultado { font-size: .88rem; }
+
 .badge {
   display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px;
   border-radius: 999px; background: var(--border); color: var(--text-dim);
@@ -452,6 +465,14 @@ textarea { resize: vertical; min-height: 60px; }
 <div id="toast" class="toast" hidden></div>
 <datalist id="dlReps"></datalist>
 <datalist id="dlKg"></datalist>
+
+<div id="vozPanel" class="voz-panel" hidden>
+  <button id="vozPanelClose" class="icon-btn voz-panel-close" title="Cerrar">✕</button>
+  <div class="voz-panel-label">Escuché</div>
+  <div id="vozEscuche" class="voz-panel-transcript"></div>
+  <div class="voz-panel-label">Entendí</div>
+  <div id="vozEntendi" class="voz-panel-resultado"></div>
+</div>
 
 <script>
 (function () {
@@ -639,6 +660,16 @@ function toast(msg) {
   t.hidden = false;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => { t.hidden = true; }, 2200);
+  // Los mensajes del comando de voz (🎙️) además quedan fijos en el panel de
+  // voz, que no se esfuma solo — así se puede ver con calma qué entendió.
+  if (msg.startsWith("🎙️")) {
+    const panel = document.getElementById("vozPanel");
+    const entendi = document.getElementById("vozEntendi");
+    if (panel && entendi) {
+      entendi.textContent = msg.replace(/^🎙️\s*/, "");
+      panel.hidden = false;
+    }
+  }
 }
 
 /* ---------------------------------------------------------------
@@ -721,7 +752,9 @@ function modalFinalizarSesion(volTotal) {
 }
 function modalAyudaVoz() {
   return modalBase("Cómo usar el comando de voz", `
-    <p>Toca 🎙️, di tu frase y suelta — no queda escuchando todo el rato.</p>
+    <p>Toca 🎙️, di tu frase y suelta — no queda escuchando todo el rato. Después de cada frase
+    aparece un panel con lo que <b>escuché</b> y lo que <b>entendí</b>, para que veas si el problema
+    fue que no te oyó bien o que dijiste algo distinto.</p>
     <table class="tabla-ayuda-voz">
       <tr><td>"1.1 S1 doce veinte"</td><td>Llena la Serie 1 del ejercicio 1.1 con 12 reps y 20 kg. Funciona con cualquier ejercicio y serie (ej. "1.2 S3 diez quince").</td></tr>
       <tr><td>"doce veinte"</td><td>Sin decir ejercicio ni serie: llena la próxima serie vacía del bloque abierto.</td></tr>
@@ -1556,6 +1589,14 @@ const UNIDAD_KG = /^(kilo|kilos|kg|kgs|peso|pesos)$/;
 // Usa las palabras "reps/kilos" para saber cuál número es cuál; si no hay
 // pistas, asume que el primer número dicho son las reps y el segundo los kg.
 function extraerRepsKgDeVoz(texto) {
+  // Por si el reconocedor llega a transcribir "erre ocho"/"ka siete punto
+  // cinco" tal cual como "r8"/"k7.5" (pasa a veces con números pegados a
+  // una letra) — se revisa antes de la ruta normal, no la reemplaza.
+  const mRK = texto.match(/\br\s*(\d+(?:[.,]\d+)?)\b[\s\S]*?\bk\s*(\d+(?:[.,]\d+)?)\b/i);
+  if (mRK) return { reps: parseFloat(mRK[1].replace(",", ".")), kg: parseFloat(mRK[2].replace(",", ".")) };
+  const mKR = texto.match(/\bk\s*(\d+(?:[.,]\d+)?)\b[\s\S]*?\br\s*(\d+(?:[.,]\d+)?)\b/i);
+  if (mKR) return { reps: parseFloat(mKR[2].replace(",", ".")), kg: parseFloat(mKR[1].replace(",", ".")) };
+
   const limpio = normalizarNumerosCompuestos(texto);
   const tokens = limpio.split(/\s+/);
   const hallados = []; // {valor, unidad, inicio, fin}
@@ -1814,6 +1855,9 @@ function procesarComandoVoz(transcriptOriginal) {
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 const micBtn = document.getElementById("micFab");
 document.getElementById("micHelpBtn").addEventListener("click", () => modalAyudaVoz());
+document.getElementById("vozPanelClose").addEventListener("click", () => {
+  document.getElementById("vozPanel").hidden = true;
+});
 let recognizer = null;
 let escuchando = false;
 
@@ -1833,6 +1877,12 @@ if (SpeechRecognitionCtor) {
   });
   recognizer.addEventListener("result", (e) => {
     const transcript = e.results[0][0].transcript;
+    const panel = document.getElementById("vozPanel");
+    const escuche = document.getElementById("vozEscuche");
+    const entendi = document.getElementById("vozEntendi");
+    escuche.textContent = `"${transcript}"`;
+    entendi.textContent = "…";
+    panel.hidden = false;
     try {
       procesarComandoVoz(transcript);
     } catch (err) {
