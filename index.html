@@ -240,6 +240,12 @@ textarea { resize: vertical; min-height: 60px; }
   width: 100%; min-width: 44px;
 }
 .series-table .serie-num { font-size: .8rem; color: var(--text-dim); font-weight: 700; }
+.serie-num-btn {
+  background: transparent; border: 1px dashed var(--border); border-radius: 6px;
+  color: var(--text-dim); font-size: .8rem; font-weight: 700; font-family: inherit;
+  padding: 4px 6px; cursor: pointer;
+}
+.serie-num-btn:hover { background: var(--border); }
 .serie-del { color: var(--danger); }
 
 .exercise-card {
@@ -1155,7 +1161,7 @@ function renderSesionActiva() {
           <tbody>
             ${Array.from({ length: maxRondas }, (_, i) => `
               <tr>
-                <td class="serie-num">S${i + 1}</td>
+                <td><button class="serie-num-btn" data-clear-serie-key="${b.key}" data-clear-serie-idx="${i}" title="Borrar solo esta serie">S${i + 1}</button></td>
                 ${b.ejercicios.map((e) => {
                   const s = entrenoActual.log[e.id][i];
                   if (!s) return `<td colspan="2">-</td>`;
@@ -1228,6 +1234,21 @@ function renderSesionActiva() {
         });
         renderSesionActiva();
         toast("🗑️ Bloque vaciado");
+      }
+    });
+  });
+  cont.querySelectorAll("[data-clear-serie-key]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const bloque = bloques.find((b) => b.key === btn.dataset.clearSerieKey);
+      const idx = parseInt(btn.dataset.clearSerieIdx, 10);
+      if (!bloque) return;
+      const ok = await modalConfirm("Borrar serie", `¿Borrar solo la S${idx + 1} de este bloque (reps/kg de ${bloque.ejercicios.map((x) => x.nombre).join(" + ")})? El resto de las series no se toca.`);
+      if (ok) {
+        bloque.ejercicios.forEach((ex) => {
+          if (entrenoActual.log[ex.id][idx]) entrenoActual.log[ex.id][idx] = { reps: "", kg: "" };
+        });
+        renderSesionActiva();
+        toast(`🗑️ S${idx + 1} borrada`);
       }
     });
   });
