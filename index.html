@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mi Rutina de Entrenamiento</title>
+<meta name="theme-color" content="#12141c">
+<style>
+:root {
+  --bg: #f4f5f7;
+  --bg-elev: #ffffff;
+  --text: #1a1c22;
+  --text-dim: #656b76;
+  --border: #e1e3e8;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --danger: #dc2626;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --radius: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12141c;
+    --bg-elev: #1c1f29;
+    --text: #eef0f4;
+    --text-dim: #9096a3;
+    --border: #2c3040;
+    --accent: #3b82f6;
+    --accent-text: #ffffff;
+    --danger: #f87171;
+    --ok: #4ade80;
+    --warn: #fbbf24;
+    --shadow: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+body { padding-bottom: 76px; }
+
+button { font-family: inherit; }
+
+h1, h2, h3 { margin: 0 0 .5em 0; line-height: 1.25; }
+h2 { font-size: 1.15rem; }
+h3 { font-size: 1rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+p { margin: 0 0 .75em 0; }
+
+/* Topbar (desktop) */
+.topbar {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-inner {
+  max-width: 900px; margin: 0 auto;
+  display: flex; align-items: center; gap: 24px;
+  padding: 10px 16px;
+}
+.brand { font-weight: 700; font-size: 1.05rem; white-space: nowrap; }
+.tabs { display: none; gap: 4px; flex-wrap: wrap; }
+.tab-btn {
+  border: none; background: transparent; color: var(--text-dim);
+  padding: 8px 14px; border-radius: 10px; cursor: pointer; font-size: .92rem; font-weight: 600;
+}
+.tab-btn.active { background: var(--accent); color: var(--accent-text); }
+
+/* Bottom nav (mobile) */
+.bottomnav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20;
+  display: flex;
+  background: var(--bg-elev);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.bn-btn {
+  flex: 1; border: none; background: transparent; color: var(--text-dim);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 0 6px; font-size: .68rem; font-weight: 600; cursor: pointer;
+}
+.bn-btn span { font-size: 1.25rem; }
+.bn-btn.active { color: var(--accent); }
+
+@media (min-width: 760px) {
+  .tabs { display: flex; }
+  .bottomnav { display: none; }
+  body { padding-bottom: 24px; }
+}
+
+/* Main */
+#app {
+  max-width: 900px; margin: 0 auto;
+  padding: 14px 12px 24px;
+}
+.view { display: block; }
+.view[hidden] { display: none; }
+
+.card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+
+/* Forms */
+label { display: block; font-size: .82rem; color: var(--text-dim); margin-bottom: 4px; font-weight: 600; }
+input, select, textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: .95rem;
+  margin-bottom: 12px;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+textarea { resize: vertical; min-height: 60px; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+@media (max-width: 480px) { .field-row { grid-template-columns: 1fr; } }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: none; border-radius: 10px; cursor: pointer;
+  background: var(--accent); color: var(--accent-text);
+  padding: 10px 16px; font-size: .9rem; font-weight: 700;
+}
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.small { padding: 6px 10px; font-size: .82rem; }
+.btn.tiny { padding: 4px 8px; font-size: .74rem; }
+.btn.block { width: 100%; }
+.btn:active { transform: scale(.97); }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+
+/* Rutina view */
+.routine-select-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.day-block {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.day-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px; cursor: pointer; background: var(--bg);
+}
+.day-header h2 { margin: 0; font-size: 1rem; }
+.day-body { padding: 10px 14px 14px; }
+.day-note { font-size: .82rem; color: var(--text-dim); margin-bottom: 10px; }
+.day-note-edit { display: flex; gap: 6px; margin-bottom: 10px; }
+.day-note-edit input { margin-bottom: 0; }
+
+.exercise-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--bg);
+}
+.exercise-top { display: flex; align-items: center; gap: 8px; }
+.exercise-grp { font-size: .72rem; color: var(--text-dim); font-weight: 700; min-width: 30px; }
+.exercise-name { flex: 1; font-weight: 600; font-size: .92rem; }
+.exercise-name-input { flex: 1; margin: 0; padding: 6px 8px; font-size: .9rem; }
+.exercise-meta { font-size: .78rem; color: var(--text-dim); margin-top: 4px; }
+.exercise-actions { display: flex; gap: 4px; }
+.icon-btn {
+  border: none; background: transparent; color: var(--text-dim);
+  cursor: pointer; font-size: 1rem; padding: 4px 6px; border-radius: 6px;
+}
+.icon-btn:hover { background: var(--border); }
+
+.exercise-link-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.exercise-link-row input { margin: 0; }
+
+/* Bloques (supersets) */
+.block-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.block-header {
+  display: flex; justify-content: space-between; align-items: center;
+  gap: 8px; padding: 10px 12px; flex-wrap: wrap;
+}
+.block-header-main { display: flex; align-items: center; gap: 8px; cursor: pointer; flex: 1; min-width: 160px; }
+.block-chevron { font-size: .75rem; color: var(--text-dim); width: 12px; }
+.block-title { font-weight: 700; font-size: .88rem; }
+.block-summary { font-size: .76rem; color: var(--text-dim); }
+.block-descanso { display: flex; align-items: center; gap: 4px; font-size: .76rem; color: var(--text-dim); }
+.block-descanso label { margin: 0; font-size: .7rem; }
+.block-descanso input { width: 56px; margin: 0; padding: 4px 6px; text-align: center; }
+.block-body { padding: 0 10px 10px; }
+
+/* Bloque en modo Entrenar */
+.block-exlist { margin-bottom: 6px; }
+.block-exname {
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 700; font-size: .92rem; gap: 8px;
+}
+.table-scroll { overflow-x: auto; }
+.block-table th:not(:first-child):not(:last-child) { border-bottom: 2px solid var(--border); }
+.timer-row-btn { font-size: 1.1rem; }
+
+/* Series table (Entrenar) */
+.series-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+.series-table th {
+  font-size: .68rem; text-transform: uppercase; color: var(--text-dim);
+  text-align: center; padding: 2px 4px; font-weight: 700;
+}
+.series-table td { padding: 3px; text-align: center; }
+.series-table input {
+  margin: 0; padding: 8px 2px; text-align: center; font-size: .9rem;
+  width: 100%; min-width: 44px;
+}
+.series-table .serie-num { font-size: .8rem; color: var(--text-dim); font-weight: 700; }
+.serie-del { color: var(--danger); }
+
+.exercise-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+.exercise-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.exercise-card-head h3 { text-transform: none; letter-spacing: 0; color: var(--text); font-size: .98rem; font-weight: 700; margin: 0; }
+.exercise-badge { font-size: .72rem; color: var(--accent); font-weight: 700; }
+.exercise-hint { font-size: .78rem; color: var(--text-dim); margin: 4px 0 6px; }
+.exercise-volumen { font-size: .78rem; color: var(--ok); font-weight: 700; margin-top: 4px; }
+
+.session-summary {
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
+  font-size: .85rem; margin-bottom: 4px;
+}
+.session-summary b { font-size: 1.05rem; }
+
+/* Historial */
+.hist-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+  margin-bottom: 8px; background: var(--bg-elev); cursor: pointer;
+}
+.hist-item .h-left { display: flex; flex-direction: column; gap: 2px; }
+.hist-item .h-date { font-weight: 700; font-size: .92rem; }
+.hist-item .h-sub { font-size: .78rem; color: var(--text-dim); }
+.hist-item .h-vol { font-weight: 700; color: var(--accent); text-align: right; }
+.hist-detail { margin-top: -4px; margin-bottom: 8px; padding: 0 14px 12px; font-size: .85rem; }
+.hist-detail table { width: 100%; border-collapse: collapse; }
+.hist-detail th, .hist-detail td { text-align: center; padding: 3px 4px; font-size: .78rem; }
+.hist-detail th { color: var(--text-dim); }
+.empty-state { text-align: center; color: var(--text-dim); padding: 30px 10px; font-size: .9rem; }
+
+.chart-wrap { overflow-x: auto; }
+.chart-wrap svg { display: block; }
+
+/* Toast */
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+  background: var(--text); color: var(--bg);
+  padding: 10px 18px; border-radius: 999px; font-size: .85rem; font-weight: 600;
+  z-index: 60; box-shadow: var(--shadow);
+}
+@media (min-width: 760px) { .toast { bottom: 24px; } }
+
+/* Timer */
+.timer-fab {
+  position: fixed; right: 16px; bottom: 90px; z-index: 30;
+  width: 52px; height: 52px; border-radius: 50%;
+  border: none; background: var(--accent); color: #fff; font-size: 1.4rem;
+  box-shadow: var(--shadow); cursor: pointer;
+}
+@media (min-width: 760px) { .timer-fab { bottom: 24px; } }
+
+.timer-widget {
+  position: fixed; right: 16px; bottom: 150px; z-index: 40;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: var(--shadow); padding: 10px 14px; text-align: center;
+  width: 190px;
+}
+@media (min-width: 760px) { .timer-widget { bottom: 90px; } }
+.timer-drag { color: var(--text-dim); font-size: .7rem; cursor: grab; user-select: none; }
+.timer-time { font-size: 2rem; font-weight: 800; font-variant-numeric: tabular-nums; margin: 4px 0 8px; }
+.timer-actions { display: flex; gap: 6px; justify-content: center; margin-bottom: 6px; }
+.timer-adjust { display: flex; gap: 6px; justify-content: center; }
+.timer-widget.ringing .timer-time { color: var(--danger); }
+
+/* Comando de voz */
+.mic-fab {
+  position: fixed; left: 16px; bottom: 90px; z-index: 30;
+  width: 52px; height: 52px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text); font-size: 1.4rem;
+  box-shadow: var(--shadow); cursor: pointer;
+}
+@media (min-width: 760px) { .mic-fab { bottom: 24px; } }
+.mic-fab:disabled { cursor: not-allowed; }
+.mic-fab.listening { background: var(--danger); color: #fff; border-color: var(--danger); animation: micpulse 1.1s infinite; }
+@keyframes micpulse {
+  0% { box-shadow: 0 0 0 0 rgba(220,38,38,.5); }
+  70% { box-shadow: 0 0 0 16px rgba(220,38,38,0); }
+  100% { box-shadow: 0 0 0 0 rgba(220,38,38,0); }
+}
+.block-train.block-activo { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.badge {
+  display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px;
+  border-radius: 999px; background: var(--border); color: var(--text-dim);
+}
+.warning-box {
+  background: color-mix(in srgb, var(--warn) 15%, transparent);
+  border: 1px solid var(--warn); color: var(--warn);
+  border-radius: 10px; padding: 10px 12px; font-size: .82rem; margin-bottom: 12px;
+}
+
+/* Modales */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0;
+}
+@media (min-width: 560px) {
+  .modal-overlay { align-items: center; padding: 20px; }
+}
+.modal-card {
+  background: var(--bg-elev);
+  width: 100%; max-width: 440px;
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px calc(18px + env(safe-area-inset-bottom, 0));
+  box-shadow: var(--shadow);
+  max-height: 85vh; overflow-y: auto;
+}
+@media (min-width: 560px) {
+  .modal-card { border-radius: 16px; }
+}
+.modal-title { margin-bottom: 10px; }
+.modal-body input, .modal-body textarea { margin-bottom: 12px; }
+.modal-actions { justify-content: flex-end; margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">🏋️ Mi Rutina</span>
+    <nav class="tabs" id="tabs">
+      <button class="tab-btn active" data-tab="entrenar">Entrenar</button>
+      <button class="tab-btn" data-tab="rutina">Rutina</button>
+      <button class="tab-btn" data-tab="historial">Historial</button>
+      <button class="tab-btn" data-tab="perfil">Perfil</button>
+      <button class="tab-btn" data-tab="datos">Datos</button>
+    </nav>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ENTRENAR -->
+  <section class="view" id="view-entrenar">
+    <div id="entrenarSelector" class="card"></div>
+    <div id="entrenarSesion"></div>
+  </section>
+
+  <!-- RUTINA -->
+  <section class="view" id="view-rutina" hidden>
+    <div id="rutinaContent"></div>
+  </section>
+
+  <!-- HISTORIAL -->
+  <section class="view" id="view-historial" hidden>
+    <div id="historialContent"></div>
+  </section>
+
+  <!-- PERFIL -->
+  <section class="view" id="view-perfil" hidden>
+    <div id="perfilContent" class="card"></div>
+  </section>
+
+  <!-- DATOS -->
+  <section class="view" id="view-datos" hidden>
+    <div id="datosContent" class="card"></div>
+  </section>
+
+</main>
+
+<!-- Cronómetro flotante -->
+<div id="timerWidget" class="timer-widget" hidden>
+  <div class="timer-drag" id="timerDrag">⋮⋮</div>
+  <div class="timer-time" id="timerTime">00:00</div>
+  <div class="timer-actions">
+    <button id="timerToggle" class="btn small">▶</button>
+    <button id="timerReset" class="btn small ghost">↺</button>
+    <button id="timerClose" class="btn small ghost">✕</button>
+  </div>
+  <div class="timer-adjust">
+    <button class="btn tiny ghost" data-adj="-15">-15s</button>
+    <button class="btn tiny ghost" data-adj="15">+15s</button>
+  </div>
+</div>
+
+<button id="timerFab" class="timer-fab" title="Cronómetro de descanso">⏱️</button>
+<button id="micFab" class="mic-fab" title="Comando de voz">🎙️</button>
+
+<nav class="bottomnav" id="bottomnav">
+  <button class="bn-btn active" data-tab="entrenar"><span>🏋️</span>Entrenar</button>
+  <button class="bn-btn" data-tab="rutina"><span>📋</span>Rutina</button>
+  <button class="bn-btn" data-tab="historial"><span>📈</span>Historial</button>
+  <button class="bn-btn" data-tab="perfil"><span>👤</span>Perfil</button>
+  <button class="bn-btn" data-tab="datos"><span>💾</span>Datos</button>
+</nav>
+
+<div id="toast" class="toast" hidden></div>
+
+<script>
+(function () {
+"use strict";
+
+/* ---------------------------------------------------------------
+   Almacenamiento
+--------------------------------------------------------------- */
+const LS = {
+  profile: "rutina_profile_v1",
+  routines: "rutina_routines_v1",
+  sessions: "rutina_sessions_v1",
+  activeRoutine: "rutina_active_routine_v1",
+};
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
+  } catch (e) {
+    return fallback;
+  }
+}
+function saveJSON(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+/* ---------------------------------------------------------------
+   Datos por defecto (extraídos de la planilla original en Excel)
+--------------------------------------------------------------- */
+function serieVacia(n) {
+  return Array.from({ length: n }, () => ({ reps: "", kg: "" }));
+}
+function ej(grupo, nombre, indicaciones, enlace, nSeries) {
+  return { id: uid(), grupo, nombre, indicaciones: indicaciones || "", enlace: enlace || "", series: serieVacia(nSeries || 4) };
+}
+
+function rutinaOriginalPorDefecto() {
+  return {
+    id: uid(),
+    nombre: "Rutina original",
+    dias: [
+      {
+        id: uid(),
+        nombre: "Día 1",
+        calentamiento: "Movilidad general / aproximar 1er ejercicio",
+        metabolicos: "Cardio opcional",
+        bloqueDescanso: {},
+        ejercicios: [
+          ej("1.1", "Press banco plano mancuernas", "", "https://www.youtube.com/watch?v=W-qU8CF-WeU"),
+          ej("1.2", "Hollow", "30\" (isométrico)", "https://www.youtube.com/watch?v=0yPin8hSc8o"),
+          ej("2.1", "Press inclinado barra en Smith", "", "https://www.youtube.com/watch?v=BhL97nBGKQo"),
+          ej("2.2", "Elevación lateral mancuernas", "12-15 reps", "https://www.youtube.com/watch?v=aVa9ce3SlSA"),
+          ej("3.1", "Push up", "", "https://www.youtube.com/watch?v=WDIpL0pjun0"),
+          ej("3.2", "Tríceps desde polea alta", "", "https://www.youtube.com/watch?v=9UzuKiOeL2c"),
+          ej("4.1", "Plancha flexión extensión codos", "45\" (isométrico)", "https://www.youtube.com/watch?v=0L6KKXw6_rQ"),
+          ej("4.2", "Abs en V con fitball", "", "https://www.youtube.com/watch?v=yiATYZRkIoY"),
+          ej("5.1", "Press francés mancuernas", "", "https://www.youtube.com/watch?v=HAyqcljtJuo"),
+        ],
+      },
+      {
+        id: uid(),
+        nombre: "Día 2",
+        calentamiento: "Movilidad general / aproximar 1er ejercicio",
+        metabolicos: "Cardio opcional",
+        bloqueDescanso: {},
+        ejercicios: [
+          ej("1.1", "Sentadilla en Smith", "12-15 reps", "https://www.youtube.com/watch?v=LoW74ROgOgA"),
+          ej("1.2", "Abducción en máquina", "", "https://www.youtube.com/watch?v=2vCRMi-lgJ4"),
+          ej("2.1", "Estocadas caminando", "", "https://www.youtube.com/watch?v=avosZcjX2Ww"),
+          ej("2.2", "Adductores en máquina", "", "https://www.youtube.com/watch?v=fItDiXXZyZo"),
+          ej("3.1", "Peso muerto rumano", "12-15 reps", "https://www.youtube.com/watch?v=UgqrPwoTick"),
+          ej("4.1", "Silla de cuádriceps", "12-15 reps", "https://www.youtube.com/watch?v=GMFFZnDz6wE"),
+          ej("4.2", "Silla de isquiotibiales", "", "https://www.youtube.com/watch?v=kU6YEyUzPcA"),
+          ej("5.1", "Gastrocnemio en Hack", "", "https://www.youtube.com/watch?v=6LGmIoadgq8"),
+          ej("5.2", "Press Pallof", "15/15 (por lado)", "https://www.youtube.com/watch?v=W8Yf1uyUnoM"),
+        ],
+      },
+      {
+        id: uid(),
+        nombre: "Día 3",
+        calentamiento: "Movilidad general / aproximar 1er ejercicio",
+        metabolicos: "Cardio opcional",
+        bloqueDescanso: {},
+        ejercicios: [
+          ej("1.1", "Pull over en polea alta", "", "https://www.youtube.com/watch?v=i_mIea-kM_g"),
+          ej("2.1", "Dominadas asistidas", "", "https://www.youtube.com/watch?v=EnaADJvdHlM"),
+          ej("3.1", "Remo en polea baja unilateral", "", "https://www.youtube.com/watch?v=8NqcH5LpDM0"),
+          ej("3.2", "Vuelos posteriores unilateral", "", "https://www.youtube.com/watch?v=oGHeGu3amJM"),
+          ej("4.1", "Remo con barra", "", "https://www.youtube.com/watch?v=qGxSGldH1l8"),
+          ej("4.2", "Curl de bíceps en polea baja", "", "https://www.youtube.com/watch?v=qtc_d6lr_yo"),
+          ej("5.1", "Abdominales en V", "", "https://www.youtube.com/watch?v=n78J6ajuCbI"),
+          ej("5.2", "Curl de bíceps en banco Scott", "Hasta el fallo", "https://www.youtube.com/watch?v=b3AS1l41jHM"),
+          ej("6.1", "Plancha en fitball", "", "https://www.youtube.com/watch?v=CTw9l84QPEU"),
+        ],
+      },
+    ],
+  };
+}
+
+/* ---------------------------------------------------------------
+   Bloques (supersets): 1.1+1.2 -> Bloque 1, 2.1+2.2 -> Bloque 2, etc.
+   El número de bloque es la parte entera del campo "grupo".
+--------------------------------------------------------------- */
+function numeroBloque(e) {
+  const n = parseInt(String(e.grupo).split(".")[0], 10);
+  return isNaN(n) ? null : n;
+}
+function agruparPorBloque(ejercicios) {
+  const map = new Map();
+  const orden = [];
+  ejercicios.forEach((e) => {
+    const n = numeroBloque(e);
+    const key = n == null ? "_" + e.id : String(n);
+    if (!map.has(key)) { map.set(key, []); orden.push(key); }
+    map.get(key).push(e);
+  });
+  return orden.map((key) => ({ key, numero: /^_/.test(key) ? null : parseInt(key, 10), ejercicios: map.get(key) }));
+}
+const DESCANSO_BLOQUE_DEFECTO = 120;
+function descansoBloque(dia, key) {
+  if (dia.bloqueDescanso && dia.bloqueDescanso[key] != null) return dia.bloqueDescanso[key];
+  return DESCANSO_BLOQUE_DEFECTO;
+}
+function linkEjercicio(e) {
+  if (e.enlace) return e.enlace;
+  return "https://www.youtube.com/results?search_query=" + encodeURIComponent(e.nombre + " técnica ejercicio");
+}
+
+/* ---------------------------------------------------------------
+   Estado
+--------------------------------------------------------------- */
+let profile = loadJSON(LS.profile, {
+  nombre: "", fechaInicio: "", edad: "", experiencia: "",
+  lesiones: "", patologias: "", objetivos: "", antecedentes: "",
+});
+let routines = loadJSON(LS.routines, null);
+if (!routines || !routines.length) {
+  routines = [rutinaOriginalPorDefecto()];
+  saveJSON(LS.routines, routines);
+}
+let sessions = loadJSON(LS.sessions, []);
+let activeRoutineId = loadJSON(LS.activeRoutine, routines[0].id);
+if (!routines.find((r) => r.id === activeRoutineId)) activeRoutineId = routines[0].id;
+
+// sesión de entrenamiento en curso (no persistida hasta finalizar)
+let entrenoActual = null; // { routineId, dayId, ejercicios: {ejercicioId: [{reps,kg}]}, startedAt }
+let bloqueActivoKey = null; // key del bloque activo en la sesión en curso (foco de teclado y de voz)
+
+function persistRoutines() { saveJSON(LS.routines, routines); }
+function persistProfile() { saveJSON(LS.profile, profile); }
+function persistSessions() { saveJSON(LS.sessions, sessions); }
+function persistActiveRoutine() { saveJSON(LS.activeRoutine, activeRoutineId); }
+
+function getRoutine(id) { return routines.find((r) => r.id === id); }
+function getDay(routine, dayId) { return routine.dias.find((d) => d.id === dayId); }
+
+/* ---------------------------------------------------------------
+   Utilidades varias
+--------------------------------------------------------------- */
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+function fmtFecha(iso) {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d.padStart(2, "0")}-${m.padStart(2, "0")}-${y}`;
+}
+function hoyISO() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => { t.hidden = true; }, 2200);
+}
+
+/* ---------------------------------------------------------------
+   Modales propios (reemplazan prompt/confirm/alert nativos:
+   más consistentes entre navegador de escritorio, celular y tablet)
+--------------------------------------------------------------- */
+function modalBase(titleHtml, bodyHtml, buttons) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.innerHTML = `<div class="modal-card">
+      <h3 class="modal-title">${titleHtml}</h3>
+      <div class="modal-body">${bodyHtml}</div>
+      <div class="btn-row modal-actions"></div>
+    </div>`;
+    document.body.appendChild(overlay);
+
+    let settled = false;
+    function finish(value) {
+      if (settled) return;
+      settled = true;
+      overlay.remove();
+      resolve(value);
+    }
+
+    const actions = overlay.querySelector(".modal-actions");
+    buttons.forEach((b) => {
+      const btn = document.createElement("button");
+      btn.className = "btn" + (b.ghost ? " ghost" : "") + (b.danger ? " danger" : "");
+      btn.textContent = b.label;
+      btn.addEventListener("click", () => finish(b.getValue ? b.getValue(overlay) : b.value));
+      actions.appendChild(btn);
+    });
+
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) finish(null); });
+    overlay.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") finish(null);
+      if (e.key === "Enter" && e.target.tagName !== "TEXTAREA") {
+        e.preventDefault();
+        actions.lastElementChild && actions.lastElementChild.click();
+      }
+    });
+
+    const firstField = overlay.querySelector("input, textarea");
+    if (firstField) {
+      firstField.focus();
+      if (firstField.select) firstField.select();
+    }
+  });
+}
+function modalPrompt(title, defaultValue, placeholder) {
+  return modalBase(esc(title), `<input id="modalInput" value="${esc(defaultValue || "")}" placeholder="${esc(placeholder || "")}">`, [
+    { label: "Cancelar", ghost: true, value: null },
+    { label: "Aceptar", getValue: (o) => o.querySelector("#modalInput").value.trim() || null },
+  ]);
+}
+function modalConfirm(title, message) {
+  return modalBase(esc(title), `<p>${esc(message)}</p>`, [
+    { label: "Cancelar", ghost: true, value: false },
+    { label: "Confirmar", danger: true, value: true },
+  ]);
+}
+function modalAlert(title, message) {
+  return modalBase(esc(title), `<p>${esc(message)}</p>`, [{ label: "Entendido", value: true }]);
+}
+function modalFinalizarSesion(volTotal) {
+  return modalBase("Finalizar sesión", `
+    <p>Volumen total de la sesión: <b>${volTotal.toLocaleString("es-CL")} kg</b></p>
+    <label>RPE de la sesión (1-10)</label>
+    <input id="modalRpe" type="number" min="1" max="10" step="0.5" inputmode="decimal">
+    <label>Comentarios (opcional)</label>
+    <textarea id="modalComentarios" placeholder="¿Cómo te sentiste?"></textarea>
+  `, [
+    { label: "Cancelar", ghost: true, value: null },
+    { label: "Guardar sesión", getValue: (o) => ({
+        rpe: o.querySelector("#modalRpe").value,
+        comentarios: o.querySelector("#modalComentarios").value,
+      }) },
+  ]);
+}
+function volumenEjercicio(seriesLog) {
+  return seriesLog.reduce((acc, s) => {
+    const r = parseFloat(s.reps) || 0;
+    const k = parseFloat(s.kg) || 0;
+    return acc + r * k;
+  }, 0);
+}
+
+/* ---------------------------------------------------------------
+   Navegación por pestañas
+--------------------------------------------------------------- */
+const TABS = ["entrenar", "rutina", "historial", "perfil", "datos"];
+function showTab(tab) {
+  TABS.forEach((t) => {
+    document.getElementById("view-" + t).hidden = t !== tab;
+  });
+  document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  document.querySelectorAll(".bn-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  if (tab === "entrenar") renderEntrenar();
+  if (tab === "rutina") renderRutina();
+  if (tab === "historial") renderHistorial();
+  if (tab === "perfil") renderPerfil();
+  if (tab === "datos") renderDatos();
+}
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest(".tab-btn");
+  if (b) showTab(b.dataset.tab);
+});
+document.getElementById("bottomnav").addEventListener("click", (e) => {
+  const b = e.target.closest(".bn-btn");
+  if (b) showTab(b.dataset.tab);
+});
+
+/* ---------------------------------------------------------------
+   PERFIL
+--------------------------------------------------------------- */
+function renderPerfil() {
+  const c = document.getElementById("perfilContent");
+  c.innerHTML = `
+    <h2>Ficha personal</h2>
+    <div class="field-row">
+      <div><label>Nombre</label><input id="pf_nombre" value="${esc(profile.nombre)}"></div>
+      <div><label>Fecha de inicio</label><input id="pf_fechaInicio" type="date" value="${esc(profile.fechaInicio)}"></div>
+    </div>
+    <div class="field-row">
+      <div><label>Edad</label><input id="pf_edad" type="number" min="0" value="${esc(profile.edad)}"></div>
+      <div><label>Experiencia de entrenamiento</label><input id="pf_experiencia" value="${esc(profile.experiencia)}" placeholder="Ej: 2 años"></div>
+    </div>
+    <label>Lesiones</label><input id="pf_lesiones" value="${esc(profile.lesiones)}" placeholder="nada">
+    <label>Patologías</label><input id="pf_patologias" value="${esc(profile.patologias)}">
+    <label>Objetivos</label><textarea id="pf_objetivos">${esc(profile.objetivos)}</textarea>
+    <label>Antecedentes</label><textarea id="pf_antecedentes">${esc(profile.antecedentes)}</textarea>
+    <button class="btn block" id="pf_guardar">Guardar ficha</button>
+  `;
+  document.getElementById("pf_guardar").addEventListener("click", () => {
+    profile = {
+      nombre: val("pf_nombre"), fechaInicio: val("pf_fechaInicio"), edad: val("pf_edad"),
+      experiencia: val("pf_experiencia"), lesiones: val("pf_lesiones"), patologias: val("pf_patologias"),
+      objetivos: val("pf_objetivos"), antecedentes: val("pf_antecedentes"),
+    };
+    persistProfile();
+    toast("Ficha guardada");
+  });
+}
+function val(id) { return document.getElementById(id).value; }
+
+/* ---------------------------------------------------------------
+   RUTINA (ver/editar)
+--------------------------------------------------------------- */
+function renderRutina() {
+  const c = document.getElementById("rutinaContent");
+  const routine = getRoutine(activeRoutineId);
+  let html = `<div class="card">
+    <div class="routine-select-row">
+      <select id="rt_select">${routines.map((r) => `<option value="${r.id}" ${r.id === activeRoutineId ? "selected" : ""}>${esc(r.nombre)}</option>`).join("")}</select>
+      <button class="btn small ghost" id="rt_nueva">+ Rutina</button>
+      <button class="btn small ghost" id="rt_renombrar">Renombrar</button>
+      ${routines.length > 1 ? '<button class="btn small danger" id="rt_borrar">Eliminar</button>' : ""}
+    </div>
+  </div>`;
+
+  routine.dias.forEach((dia) => {
+    const bloques = agruparPorBloque(dia.ejercicios);
+    html += `<div class="day-block" data-day="${dia.id}">
+      <div class="day-header" data-toggle="${dia.id}">
+        <h2>${esc(dia.nombre)}</h2>
+        <div class="exercise-actions">
+          <button class="icon-btn" data-act="rename-day" data-day="${dia.id}" title="Renombrar día">✏️</button>
+          <button class="icon-btn" data-act="del-day" data-day="${dia.id}" title="Eliminar día">🗑️</button>
+        </div>
+      </div>
+      <div class="day-body" id="body-${dia.id}">
+        <div class="day-note-edit">
+          <input data-note="calentamiento" data-day="${dia.id}" value="${esc(dia.calentamiento || "")}" placeholder="Calentamiento">
+        </div>
+        <div class="day-note-edit">
+          <input data-note="metabolicos" data-day="${dia.id}" value="${esc(dia.metabolicos || "")}" placeholder="Metabólicos / cardio">
+        </div>
+        ${bloques.map((b) => blockEdit(dia, b)).join("")}
+        <button class="btn small ghost" data-act="add-ej" data-day="${dia.id}">+ Ejercicio</button>
+      </div>
+    </div>`;
+  });
+  html += `<button class="btn ghost block" id="rt_add_dia">+ Agregar día</button>`;
+  c.innerHTML = html;
+  wireRutinaEvents(routine);
+}
+
+function blockEdit(dia, b) {
+  const bodyId = `blockbody-${dia.id}-${b.key}`;
+  const titulo = b.numero != null ? `Bloque ${b.numero}` : "Ejercicio suelto";
+  const resumen = b.ejercicios.map((e) => esc(e.nombre)).join(" + ");
+  return `<div class="block-card">
+    <div class="block-header">
+      <div class="block-header-main" data-toggle-block="${bodyId}">
+        <span class="block-chevron" id="chev-${bodyId}">▸</span>
+        <div class="block-titles">
+          <div class="block-title">${titulo}</div>
+          <div class="block-summary">${resumen}</div>
+        </div>
+      </div>
+      <div class="block-descanso">
+        <label>Descanso</label>
+        <input type="number" min="0" step="5" class="descanso-input" data-day="${dia.id}" data-block="${b.key}" value="${descansoBloque(dia, b.key)}">
+        <span>s</span>
+      </div>
+    </div>
+    <div class="block-body" id="${bodyId}" hidden>
+      ${b.ejercicios.map((e) => exerciseRowEdit(dia, e)).join("")}
+    </div>
+  </div>`;
+}
+
+function exerciseRowEdit(dia, e) {
+  return `<div class="exercise-row" data-ej="${e.id}">
+    <div class="exercise-top">
+      <span class="exercise-grp">${esc(e.grupo)}</span>
+      <input class="exercise-name-input" data-field="nombre" data-day="${dia.id}" data-ej="${e.id}" value="${esc(e.nombre)}">
+      <div class="exercise-actions">
+        <button class="icon-btn" data-act="add-serie" data-day="${dia.id}" data-ej="${e.id}" title="Agregar serie">➕</button>
+        <button class="icon-btn" data-act="del-serie" data-day="${dia.id}" data-ej="${e.id}" title="Quitar serie">➖</button>
+        <button class="icon-btn" data-act="del-ej" data-day="${dia.id}" data-ej="${e.id}" title="Eliminar ejercicio">🗑️</button>
+      </div>
+    </div>
+    <input data-field="indicaciones" data-day="${dia.id}" data-ej="${e.id}" value="${esc(e.indicaciones)}" placeholder="Indicaciones (reps objetivo, descanso, etc.)" style="margin-top:6px;margin-bottom:6px;">
+    <div class="exercise-link-row">
+      <input data-field="enlace" data-day="${dia.id}" data-ej="${e.id}" value="${esc(e.enlace)}" placeholder="Link a foto/video/animación (opcional)">
+      <a class="icon-btn" href="${linkEjercicio(e)}" target="_blank" rel="noopener" title="Ver cómo se hace">▶️</a>
+    </div>
+    <div class="exercise-meta">${e.series.length} serie(s)</div>
+  </div>`;
+}
+
+function wireRutinaEvents(routine) {
+  document.getElementById("rt_select").addEventListener("change", (e) => {
+    activeRoutineId = e.target.value; persistActiveRoutine(); renderRutina();
+  });
+  document.getElementById("rt_nueva").addEventListener("click", async () => {
+    const nombre = await modalPrompt("Nueva rutina", "Rutina nueva", "Nombre de la rutina");
+    if (!nombre) return;
+    const nueva = { id: uid(), nombre, dias: [] };
+    routines.push(nueva); activeRoutineId = nueva.id;
+    persistRoutines(); persistActiveRoutine(); renderRutina();
+  });
+  document.getElementById("rt_renombrar").addEventListener("click", async () => {
+    const nombre = await modalPrompt("Renombrar rutina", routine.nombre);
+    if (!nombre) return;
+    routine.nombre = nombre; persistRoutines(); renderRutina();
+  });
+  const btnBorrar = document.getElementById("rt_borrar");
+  if (btnBorrar) btnBorrar.addEventListener("click", async () => {
+    const ok = await modalConfirm("Eliminar rutina", `¿Eliminar la rutina "${routine.nombre}"? Esto no borra tu historial de sesiones.`);
+    if (!ok) return;
+    routines = routines.filter((r) => r.id !== routine.id);
+    activeRoutineId = routines[0].id;
+    persistRoutines(); persistActiveRoutine(); renderRutina();
+  });
+  document.getElementById("rt_add_dia").addEventListener("click", async () => {
+    const nombre = await modalPrompt("Nuevo día", `Día ${routine.dias.length + 1}`);
+    if (!nombre) return;
+    routine.dias.push({ id: uid(), nombre, calentamiento: "", metabolicos: "", ejercicios: [] });
+    persistRoutines(); renderRutina();
+  });
+
+  document.getElementById("rutinaContent").addEventListener("click", rutinaClickHandler);
+  document.getElementById("rutinaContent").addEventListener("change", rutinaChangeHandler);
+}
+
+async function rutinaClickHandler(e) {
+  const routine = getRoutine(activeRoutineId);
+  const toggleBlock = e.target.closest("[data-toggle-block]");
+  if (toggleBlock) {
+    const body = document.getElementById(toggleBlock.dataset.toggleBlock);
+    body.hidden = !body.hidden;
+    const chev = document.getElementById("chev-" + toggleBlock.dataset.toggleBlock);
+    if (chev) chev.textContent = body.hidden ? "▸" : "▾";
+    return;
+  }
+  const toggle = e.target.closest("[data-toggle]");
+  if (toggle) {
+    const body = document.getElementById("body-" + toggle.dataset.toggle);
+    body.style.display = body.style.display === "none" ? "" : "none";
+    return;
+  }
+  const btn = e.target.closest("[data-act]");
+  if (!btn) return;
+  const act = btn.dataset.act;
+  const diaForEj = btn.dataset.day ? getDay(routine, btn.dataset.day) : null;
+  const exObj = diaForEj && btn.dataset.ej ? diaForEj.ejercicios.find((x) => x.id === btn.dataset.ej) : null;
+
+  if (act === "rename-day") {
+    const d = getDay(routine, btn.dataset.day);
+    const nombre = await modalPrompt("Renombrar día", d.nombre);
+    if (nombre) { d.nombre = nombre; persistRoutines(); renderRutina(); }
+  } else if (act === "del-day") {
+    const ok = await modalConfirm("Eliminar día", "¿Eliminar este día completo?");
+    if (ok) {
+      routine.dias = routine.dias.filter((d) => d.id !== btn.dataset.day);
+      persistRoutines(); renderRutina();
+    }
+  } else if (act === "add-ej") {
+    const d = getDay(routine, btn.dataset.day);
+    const nombre = await modalPrompt("Nuevo ejercicio", "", "Nombre del ejercicio");
+    if (!nombre) return;
+    const grupo = await modalPrompt("Grupo / superserie", `${d.ejercicios.length + 1}.1`, "Ej: 1.1");
+    d.ejercicios.push(ej(grupo || "", nombre));
+    persistRoutines(); renderRutina();
+  } else if (act === "del-ej" && exObj) {
+    const ok = await modalConfirm("Eliminar ejercicio", `¿Eliminar "${exObj.nombre}"?`);
+    if (ok) {
+      diaForEj.ejercicios = diaForEj.ejercicios.filter((x) => x.id !== exObj.id);
+      persistRoutines(); renderRutina();
+    }
+  } else if (act === "add-serie" && exObj) {
+    exObj.series.push({ reps: "", kg: "" });
+    persistRoutines(); renderRutina();
+  } else if (act === "del-serie" && exObj) {
+    if (exObj.series.length > 1) exObj.series.pop();
+    persistRoutines(); renderRutina();
+  }
+}
+
+function rutinaChangeHandler(e) {
+  const routine = getRoutine(activeRoutineId);
+  const t = e.target;
+  if (t.dataset.note) {
+    const d = getDay(routine, t.dataset.day);
+    d[t.dataset.note] = t.value;
+    persistRoutines();
+  } else if (t.dataset.field) {
+    const d = getDay(routine, t.dataset.day);
+    const ex = d.ejercicios.find((x) => x.id === t.dataset.ej);
+    ex[t.dataset.field] = t.value;
+    persistRoutines();
+  } else if (t.dataset.block) {
+    const d = getDay(routine, t.dataset.day);
+    if (!d.bloqueDescanso) d.bloqueDescanso = {};
+    const seg = parseInt(t.value, 10);
+    d.bloqueDescanso[t.dataset.block] = isNaN(seg) ? DESCANSO_BLOQUE_DEFECTO : Math.max(0, seg);
+    persistRoutines();
+  }
+}
+
+/* ---------------------------------------------------------------
+   ENTRENAR (registrar una sesión)
+--------------------------------------------------------------- */
+function renderEntrenar() {
+  const sel = document.getElementById("entrenarSelector");
+  const routine = getRoutine(activeRoutineId);
+
+  if (!entrenoActual) {
+    sel.innerHTML = `
+      <h2>Comenzar entrenamiento</h2>
+      <label>Rutina</label>
+      <select id="en_rutina">${routines.map((r) => `<option value="${r.id}" ${r.id === activeRoutineId ? "selected" : ""}>${esc(r.nombre)}</option>`).join("")}</select>
+      <label>Día</label>
+      <select id="en_dia">${routine.dias.map((d) => `<option value="${d.id}">${esc(d.nombre)}</option>`).join("")}</select>
+      ${routine.dias.length === 0 ? '<p class="warning-box">Esta rutina no tiene días. Ve a la pestaña "Rutina" para agregar uno.</p>' : `<button class="btn block" id="en_iniciar">Iniciar sesión</button>`}
+    `;
+    document.getElementById("en_rutina").addEventListener("change", (e) => {
+      activeRoutineId = e.target.value; persistActiveRoutine(); renderEntrenar();
+    });
+    const btn = document.getElementById("en_iniciar");
+    if (btn) btn.addEventListener("click", () => {
+      const dayId = val("en_dia");
+      iniciarEntreno(activeRoutineId, dayId);
+    });
+    document.getElementById("entrenarSesion").innerHTML = "";
+    return;
+  }
+
+  sel.innerHTML = "";
+  renderSesionActiva();
+}
+
+function iniciarEntreno(routineId, dayId) {
+  const routine = getRoutine(routineId);
+  const dia = getDay(routine, dayId);
+  const log = {};
+  dia.ejercicios.forEach((e) => {
+    log[e.id] = e.series.map(() => ({ reps: "", kg: "" }));
+  });
+  entrenoActual = { routineId, dayId, log, startedAt: Date.now() };
+  bloqueActivoKey = null;
+  renderEntrenar();
+}
+
+function bloquesActuales() {
+  if (!entrenoActual) return [];
+  const routine = getRoutine(entrenoActual.routineId);
+  const dia = getDay(routine, entrenoActual.dayId);
+  return agruparPorBloque(dia.ejercicios);
+}
+
+function renderSesionActiva() {
+  const cont = document.getElementById("entrenarSesion");
+  const routine = getRoutine(entrenoActual.routineId);
+  const dia = getDay(routine, entrenoActual.dayId);
+  const bloques = agruparPorBloque(dia.ejercicios);
+  if (bloqueActivoKey == null && bloques.length) bloqueActivoKey = bloques[0].key;
+
+  let volTotal = 0;
+  dia.ejercicios.forEach((e) => { volTotal += volumenEjercicio(entrenoActual.log[e.id]); });
+
+  let html = `<div class="card">
+    <div class="session-summary">
+      <div>Sesión: <b>${esc(dia.nombre)}</b></div>
+      <div>Volumen total: <b id="en_vol_total">${volTotal.toLocaleString("es-CL")} kg</b></div>
+    </div>
+    ${dia.calentamiento ? `<div class="day-note">🔥 Calentamiento: ${esc(dia.calentamiento)}</div>` : ""}
+    <div class="btn-row">
+      <button class="btn danger" id="en_cancelar">Cancelar sesión</button>
+      <button class="btn" id="en_finalizar">Finalizar sesión</button>
+    </div>
+  </div>`;
+
+  bloques.forEach((b) => {
+    const maxRondas = Math.max(...b.ejercicios.map((e) => entrenoActual.log[e.id].length));
+    const volBloque = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
+    const titulo = b.numero != null ? `Bloque ${b.numero}` : "Ejercicio";
+
+    html += `<div class="exercise-card block-train" data-block-key="${b.key}">
+      <div class="exercise-card-head">
+        <h3>${titulo}</h3>
+      </div>
+      <div class="block-exlist">
+        ${b.ejercicios.map((e) => `
+          <div class="block-exname">
+            <span>${esc(e.grupo)} ${esc(e.nombre)}</span>
+            <a href="${linkEjercicio(e)}" target="_blank" rel="noopener" class="icon-btn" title="Ver cómo se hace">▶️</a>
+          </div>
+          ${e.indicaciones ? `<div class="exercise-hint">${esc(e.indicaciones)}</div>` : ""}
+        `).join("")}
+      </div>
+      <div class="table-scroll">
+      <table class="series-table block-table">
+        <thead>
+          <tr>
+            <th></th>
+            ${b.ejercicios.map((e) => `<th colspan="2">${esc(e.grupo)}</th>`).join("")}
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${Array.from({ length: maxRondas }, (_, i) => `
+            <tr>
+              <td class="serie-num">S${i + 1}</td>
+              ${b.ejercicios.map((e) => {
+                const s = entrenoActual.log[e.id][i];
+                if (!s) return `<td colspan="2">-</td>`;
+                return `<td><input inputmode="numeric" placeholder="reps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
+                <td><input inputmode="decimal" placeholder="kg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
+              }).join("")}
+              <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" title="Iniciar descanso del bloque">⏱️</button></td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+      </div>
+      <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
+    </div>`;
+  });
+
+  if (dia.metabolicos) {
+    html += `<div class="card day-note">🏃 Metabólicos: ${esc(dia.metabolicos)}</div>`;
+  }
+
+  cont.innerHTML = html;
+
+  cont.addEventListener("input", (e) => {
+    const t = e.target;
+    if (t.dataset.field && t.dataset.ej !== undefined && t.dataset.idx !== undefined) {
+      entrenoActual.log[t.dataset.ej][+t.dataset.idx][t.dataset.field] = t.value;
+      updateVolumenLive();
+    }
+  });
+  cont.addEventListener("focusin", (e) => {
+    const card = e.target.closest("[data-block-key]");
+    if (card) { bloqueActivoKey = card.dataset.blockKey; resaltarBloqueActivo(); }
+  });
+  cont.querySelectorAll("[data-timer-block]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      bloqueActivoKey = btn.dataset.timerBlock;
+      resaltarBloqueActivo();
+      startTimer(descansoBloque(dia, btn.dataset.timerBlock));
+    });
+  });
+  document.getElementById("en_cancelar").addEventListener("click", async () => {
+    const ok = await modalConfirm("Cancelar sesión", "¿Cancelar esta sesión? Se perderá lo registrado.");
+    if (ok) { entrenoActual = null; renderEntrenar(); }
+  });
+  document.getElementById("en_finalizar").addEventListener("click", finalizarSesion);
+  resaltarBloqueActivo();
+}
+
+function resaltarBloqueActivo() {
+  document.querySelectorAll(".block-train").forEach((x) => {
+    x.classList.toggle("block-activo", x.dataset.blockKey === bloqueActivoKey);
+  });
+}
+
+function moverBloqueActivo(delta) {
+  const bloques = bloquesActuales();
+  if (!bloques.length) { toast("🎙️ No hay bloques en este día"); return; }
+  let idx = bloques.findIndex((b) => b.key === bloqueActivoKey);
+  if (idx === -1) idx = 0;
+  idx = Math.max(0, Math.min(bloques.length - 1, idx + delta));
+  bloqueActivoKey = bloques[idx].key;
+  resaltarBloqueActivo();
+  const el = document.querySelector(`.block-train[data-block-key="${CSS.escape(bloqueActivoKey)}"]`);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  toast(`🎙️ ${bloques[idx].numero != null ? "Bloque " + bloques[idx].numero : "Ejercicio"} activo`);
+}
+
+function updateVolumenLive() {
+  const routine = getRoutine(entrenoActual.routineId);
+  const dia = getDay(routine, entrenoActual.dayId);
+  const bloques = agruparPorBloque(dia.ejercicios);
+  let volTotal = 0;
+  bloques.forEach((b) => {
+    const volBloque = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
+    volTotal += volBloque;
+    const el = document.getElementById("blockvol-" + b.key);
+    if (el) el.textContent = `Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg`;
+  });
+  const b = document.getElementById("en_vol_total");
+  if (b) b.textContent = `${volTotal.toLocaleString("es-CL")} kg`;
+}
+
+async function finalizarSesion() {
+  const routine = getRoutine(entrenoActual.routineId);
+  const dia = getDay(routine, entrenoActual.dayId);
+  const volPrevia = dia.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
+  const resultado = await modalFinalizarSesion(volPrevia);
+  if (!resultado) return;
+  const rpe = resultado.rpe === "" ? null : parseFloat(resultado.rpe);
+  const comentarios = resultado.comentarios || "";
+
+  let volTotal = 0;
+  const ejercicios = dia.ejercicios.map((e) => {
+    const seriesLog = entrenoActual.log[e.id].filter((s) => s.reps !== "" || s.kg !== "");
+    const vol = volumenEjercicio(seriesLog);
+    volTotal += vol;
+    return { ejercicioId: e.id, nombre: e.nombre, grupo: e.grupo, series: seriesLog, volumen: vol };
+  });
+
+  const sesion = {
+    id: uid(),
+    routineId: routine.id,
+    routineNombre: routine.nombre,
+    dayId: dia.id,
+    dayNombre: dia.nombre,
+    fecha: hoyISO(),
+    ejercicios,
+    volumenTotal: volTotal,
+    rpe: isNaN(rpe) ? null : rpe,
+    comentarios,
+  };
+  sessions.push(sesion);
+  persistSessions();
+  entrenoActual = null;
+  toast("Sesión guardada ✅");
+  renderEntrenar();
+}
+
+/* ---------------------------------------------------------------
+   HISTORIAL + gráfico
+--------------------------------------------------------------- */
+function renderHistorial() {
+  const c = document.getElementById("historialContent");
+  if (!sessions.length) {
+    c.innerHTML = `<div class="empty-state">Aún no registras sesiones.<br>Ve a "Entrenar" para empezar.</div>`;
+    return;
+  }
+  const ordenadas = [...sessions].sort((a, b) => (a.fecha < b.fecha ? 1 : -1));
+
+  let html = `<div class="card">
+    <h2>Progreso</h2>
+    <div class="chart-wrap">${buildChart(ordenadas)}</div>
+  </div>`;
+
+  html += `<h3>Sesiones (${sessions.length})</h3>`;
+  ordenadas.forEach((s) => {
+    html += `<div class="hist-item" data-toggle-sesion="${s.id}">
+      <div class="h-left">
+        <div class="h-date">${fmtFecha(s.fecha)} · ${esc(s.dayNombre)}</div>
+        <div class="h-sub">${esc(s.routineNombre)}${s.rpe != null ? " · RPE " + s.rpe : ""}</div>
+      </div>
+      <div class="h-vol">${s.volumenTotal.toLocaleString("es-CL")} kg</div>
+    </div>
+    <div class="hist-detail" id="detail-${s.id}" hidden>
+      <table>
+        <thead><tr><th style="text-align:left">Ejercicio</th><th>Series</th><th>Volumen</th></tr></thead>
+        <tbody>
+          ${s.ejercicios.filter((e) => e.series.length).map((e) => `
+            <tr>
+              <td style="text-align:left">${esc(e.grupo)} ${esc(e.nombre)}</td>
+              <td>${e.series.map((x) => `${x.reps || "-"}x${x.kg || "-"}`).join(", ")}</td>
+              <td>${e.volumen.toLocaleString("es-CL")}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>
+      ${s.comentarios ? `<p style="margin-top:8px"><b>Comentarios:</b> ${esc(s.comentarios)}</p>` : ""}
+      <button class="btn small danger" data-del-sesion="${s.id}">Eliminar sesión</button>
+    </div>`;
+  });
+  c.innerHTML = html;
+
+  c.querySelectorAll("[data-toggle-sesion]").forEach((item) => {
+    item.addEventListener("click", () => {
+      const d = document.getElementById("detail-" + item.dataset.toggleSesion);
+      d.hidden = !d.hidden;
+    });
+  });
+  c.querySelectorAll("[data-del-sesion]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const ok = await modalConfirm("Eliminar sesión", "¿Eliminar esta sesión del historial?");
+      if (ok) {
+        sessions = sessions.filter((s) => s.id !== btn.dataset.delSesion);
+        persistSessions();
+        renderHistorial();
+      }
+    });
+  });
+}
+
+function buildChart(ordenadasDesc) {
+  const datos = [...ordenadasDesc].reverse(); // ascendente en el tiempo
+  const w = Math.max(320, datos.length * 46);
+  const h = 160;
+  const padL = 40, padB = 22, padT = 10;
+  const maxVol = Math.max(1, ...datos.map((d) => d.volumenTotal));
+
+  const points = datos.map((d, i) => {
+    const x = padL + (i * (w - padL - 10)) / Math.max(1, datos.length - 1 || 1);
+    const y = h - padB - (d.volumenTotal / maxVol) * (h - padB - padT);
+    return { x, y, d };
+  });
+
+  const path = points.map((p, i) => (i === 0 ? "M" : "L") + p.x.toFixed(1) + "," + p.y.toFixed(1)).join(" ");
+  const gridLines = [0, 0.5, 1].map((f) => {
+    const y = padT + f * (h - padB - padT);
+    const val = Math.round(maxVol * (1 - f));
+    return `<line x1="${padL}" y1="${y}" x2="${w - 5}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
+            <text x="2" y="${y + 4}" font-size="9" fill="var(--text-dim)">${val}</text>`;
+  }).join("");
+
+  const circles = points.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3.5" fill="var(--accent)"><title>${fmtFecha(p.d.fecha)}: ${p.d.volumenTotal} kg</title></circle>`).join("");
+  const labels = points.length <= 20 ? points.map((p) => `<text x="${p.x}" y="${h - 6}" font-size="8" fill="var(--text-dim)" text-anchor="middle">${fmtFecha(p.d.fecha).slice(0, 5)}</text>`).join("") : "";
+
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    ${gridLines}
+    <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2"/>
+    ${circles}
+    ${labels}
+  </svg>`;
+}
+
+/* ---------------------------------------------------------------
+   DATOS (exportar / importar / respaldo)
+--------------------------------------------------------------- */
+function renderDatos() {
+  const c = document.getElementById("datosContent");
+  c.innerHTML = `
+    <h2>Tus datos</h2>
+    <p>Todo se guarda solo en este dispositivo/navegador. Para llevar tus datos a otro celular, tablet o PC,
+    exporta un archivo y luego impórtalo ahí.</p>
+    <div class="btn-row">
+      <button class="btn" id="dt_exportar">⬇️ Exportar datos (.json)</button>
+      <button class="btn ghost" id="dt_importar">⬆️ Importar datos (.json)</button>
+    </div>
+    <input type="file" id="dt_file" accept="application/json" hidden>
+    <hr style="border:none;border-top:1px solid var(--border);margin:16px 0">
+    <h2>Reiniciar</h2>
+    <p>Borra todo lo guardado en este dispositivo y vuelve a la rutina original de fábrica.</p>
+    <button class="btn danger" id="dt_reset">🗑️ Borrar todo y reiniciar</button>
+  `;
+  document.getElementById("dt_exportar").addEventListener("click", exportarDatos);
+  document.getElementById("dt_importar").addEventListener("click", () => document.getElementById("dt_file").click());
+  document.getElementById("dt_file").addEventListener("change", importarDatos);
+  document.getElementById("dt_reset").addEventListener("click", async () => {
+    const ok = await modalConfirm("Borrar todo", "Esto borrará tu perfil, rutinas e historial de este dispositivo. ¿Continuar?");
+    if (ok) {
+      localStorage.removeItem(LS.profile);
+      localStorage.removeItem(LS.routines);
+      localStorage.removeItem(LS.sessions);
+      localStorage.removeItem(LS.activeRoutine);
+      location.reload();
+    }
+  });
+}
+
+function exportarDatos() {
+  const data = { version: 1, exportadoEl: new Date().toISOString(), profile, routines, sessions };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `mi-rutina-backup-${hoyISO()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast("Archivo exportado");
+}
+
+function importarDatos(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || typeof data !== "object") throw new Error("formato inválido");
+      const ok = await modalConfirm("Importar datos", "Esto reemplazará tus datos actuales en este dispositivo por los del archivo. ¿Continuar?");
+      if (!ok) return;
+      if (data.profile) profile = data.profile;
+      if (Array.isArray(data.routines) && data.routines.length) routines = data.routines;
+      if (Array.isArray(data.sessions)) sessions = data.sessions;
+      activeRoutineId = routines[0].id;
+      persistProfile(); persistRoutines(); persistSessions(); persistActiveRoutine();
+      toast("Datos importados ✅");
+      showTab("entrenar");
+    } catch (err) {
+      await modalAlert("Error al importar", "No se pudo leer el archivo: " + err.message);
+    } finally {
+      e.target.value = "";
+    }
+  };
+  reader.readAsText(file);
+}
+
+/* ---------------------------------------------------------------
+   Cronómetro de descanso
+--------------------------------------------------------------- */
+const timerWidget = document.getElementById("timerWidget");
+const timerTimeEl = document.getElementById("timerTime");
+const timerFab = document.getElementById("timerFab");
+let timerSeconds = 60;
+let timerRemaining = 60;
+let timerInterval = null;
+let timerRunning = false;
+
+function fmtTime(s) {
+  s = Math.max(0, Math.round(s));
+  const m = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${String(m).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+function renderTimer() {
+  timerTimeEl.textContent = fmtTime(timerRemaining);
+  document.getElementById("timerToggle").textContent = timerRunning ? "⏸" : "▶";
+  timerWidget.classList.toggle("ringing", timerRemaining <= 0);
+}
+function startTimer(seconds) {
+  timerSeconds = seconds;
+  timerRemaining = seconds;
+  timerWidget.hidden = false;
+  timerRunning = false;
+  clearInterval(timerInterval);
+  renderTimer();
+  toggleTimer();
+}
+function toggleTimer() {
+  timerRunning = !timerRunning;
+  clearInterval(timerInterval);
+  if (timerRunning) {
+    const tick = () => {
+      timerRemaining -= 1;
+      if (timerRemaining <= 0) {
+        timerRemaining = 0;
+        renderTimer();
+        clearInterval(timerInterval);
+        timerRunning = false;
+        beep();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+        renderTimer();
+        return;
+      }
+      renderTimer();
+    };
+    timerInterval = setInterval(tick, 1000);
+  }
+  renderTimer();
+}
+function beep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g); g.connect(ctx.destination);
+    o.frequency.value = 880;
+    g.gain.setValueAtTime(0.2, ctx.currentTime);
+    o.start();
+    o.stop(ctx.currentTime + 0.35);
+    o.onended = () => ctx.close();
+  } catch (e) { /* audio no disponible */ }
+}
+timerFab.addEventListener("click", () => {
+  if (timerWidget.hidden) startTimer(60); else timerWidget.hidden = true;
+});
+document.getElementById("timerToggle").addEventListener("click", toggleTimer);
+document.getElementById("timerReset").addEventListener("click", () => {
+  timerRemaining = timerSeconds;
+  timerRunning = false;
+  clearInterval(timerInterval);
+  renderTimer();
+});
+document.getElementById("timerClose").addEventListener("click", () => {
+  timerWidget.hidden = true;
+  clearInterval(timerInterval);
+  timerRunning = false;
+});
+document.querySelectorAll("[data-adj]").forEach((b) => {
+  b.addEventListener("click", () => {
+    const delta = parseInt(b.dataset.adj, 10);
+    timerRemaining = Math.max(0, timerRemaining + delta);
+    timerSeconds = Math.max(timerSeconds + delta, timerRemaining);
+    renderTimer();
+  });
+});
+
+// arrastrar el widget del cronómetro (touch + mouse)
+(function enableDrag() {
+  const handle = document.getElementById("timerDrag");
+  let dragging = false, offX = 0, offY = 0;
+  function start(clientX, clientY) {
+    dragging = true;
+    const r = timerWidget.getBoundingClientRect();
+    offX = clientX - r.left; offY = clientY - r.top;
+    timerWidget.style.right = "auto"; timerWidget.style.bottom = "auto";
+  }
+  function move(clientX, clientY) {
+    if (!dragging) return;
+    timerWidget.style.left = Math.min(window.innerWidth - 60, Math.max(0, clientX - offX)) + "px";
+    timerWidget.style.top = Math.min(window.innerHeight - 60, Math.max(0, clientY - offY)) + "px";
+  }
+  function end() { dragging = false; }
+  handle.addEventListener("mousedown", (e) => start(e.clientX, e.clientY));
+  window.addEventListener("mousemove", (e) => move(e.clientX, e.clientY));
+  window.addEventListener("mouseup", end);
+  handle.addEventListener("touchstart", (e) => { const t = e.touches[0]; start(t.clientX, t.clientY); }, { passive: true });
+  window.addEventListener("touchmove", (e) => { const t = e.touches[0]; move(t.clientX, t.clientY); }, { passive: true });
+  window.addEventListener("touchend", end);
+})();
+
+/* ---------------------------------------------------------------
+   Comando de voz
+--------------------------------------------------------------- */
+const NUMEROS_TEXTO = {
+  cero: 0, un: 1, uno: 1, una: 1, dos: 2, tres: 3, cuatro: 4, cinco: 5, seis: 6, siete: 7, ocho: 8, nueve: 9,
+  diez: 10, once: 11, doce: 12, trece: 13, catorce: 14, quince: 15, dieciseis: 16, dieciséis: 16,
+  diecisiete: 17, dieciocho: 18, diecinueve: 19, veinte: 20, treinta: 30, cuarenta: 40, cincuenta: 50,
+  sesenta: 60, setenta: 70, ochenta: 80, noventa: 90, cien: 100, ciento: 100,
+};
+function palabraANumero(palabra) {
+  return NUMEROS_TEXTO[palabra.toLowerCase().replace(/[^a-záéíóúñ]/gi, "")];
+}
+function extraerNumeros(texto) {
+  const limpio = texto.toLowerCase()
+    .replace(/veintiún|veintiuno/g, "veinte y uno").replace(/veintidós|veintidos/g, "veinte y dos")
+    .replace(/veintitrés|veintitres/g, "veinte y tres").replace(/veinticuatro/g, "veinte y cuatro")
+    .replace(/veinticinco/g, "veinte y cinco").replace(/veintiséis|veintiseis/g, "veinte y seis")
+    .replace(/veintisiete/g, "veinte y siete").replace(/veintiocho/g, "veinte y ocho")
+    .replace(/veintinueve/g, "veinte y nueve");
+  const tokens = limpio.split(/\s+/);
+  const numeros = [];
+  let acumulado = null;
+  tokens.forEach((tok) => {
+    const digito = /^\d+$/.test(tok) ? parseInt(tok, 10) : palabraANumero(tok);
+    if (digito != null) {
+      if (acumulado != null && acumulado >= 20 && acumulado % 10 === 0 && digito < 10) {
+        acumulado += digito;
+      } else if (acumulado != null) {
+        numeros.push(acumulado);
+        acumulado = digito;
+      } else {
+        acumulado = digito;
+      }
+    } else if (tok !== "y" && acumulado != null) {
+      numeros.push(acumulado);
+      acumulado = null;
+    }
+  });
+  if (acumulado != null) numeros.push(acumulado);
+  return numeros;
+}
+
+function dictarSerie(reps, kg) {
+  const bloques = bloquesActuales();
+  const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
+  if (!bloque) { toast("🎙️ No hay bloque activo"); return; }
+  for (const ex of bloque.ejercicios) {
+    const serieLog = entrenoActual.log[ex.id];
+    for (let i = 0; i < serieLog.length; i++) {
+      if (serieLog[i].reps === "" && serieLog[i].kg === "") {
+        serieLog[i].reps = String(reps);
+        serieLog[i].kg = String(kg);
+        renderSesionActiva();
+        toast(`🎙️ ${ex.nombre}: ${reps} reps × ${kg} kg`);
+        return;
+      }
+    }
+  }
+  toast("🎙️ Ese bloque ya tiene todas las series llenas");
+}
+
+function procesarComandoVoz(transcriptOriginal) {
+  const t = transcriptOriginal.toLowerCase().trim();
+  if (!t) return;
+
+  if (/\bdescans/.test(t)) {
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
+    showTab("entrenar");
+    const routine = getRoutine(entrenoActual.routineId);
+    const dia = getDay(routine, entrenoActual.dayId);
+    startTimer(descansoBloque(dia, bloqueActivoKey));
+    toast("🎙️ Descanso iniciado");
+    return;
+  }
+  if (/\bsiguiente\b/.test(t)) {
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
+    showTab("entrenar"); moverBloqueActivo(1); return;
+  }
+  if (/\banterior\b/.test(t)) {
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
+    showTab("entrenar"); moverBloqueActivo(-1); return;
+  }
+
+  const destinos = ["entrenar", "rutina", "historial", "perfil", "datos"];
+  const destinoDicho = destinos.find((d) => t.includes(d));
+  if (destinoDicho && /\b(ir|ve|abr|mostrar|abre)\b/.test(t)) {
+    showTab(destinoDicho);
+    toast(`🎙️ Abriendo ${destinoDicho}`);
+    return;
+  }
+
+  const numeros = extraerNumeros(t);
+  if (numeros.length >= 2) {
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
+    showTab("entrenar");
+    dictarSerie(numeros[0], numeros[1]);
+    return;
+  }
+  toast(`🎙️ No entendí: "${transcriptOriginal}"`);
+}
+
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+const micBtn = document.getElementById("micFab");
+let recognizer = null;
+let escuchando = false;
+
+if (SpeechRecognitionCtor) {
+  recognizer = new SpeechRecognitionCtor();
+  recognizer.lang = "es-CL";
+  recognizer.continuous = false;
+  recognizer.interimResults = false;
+  recognizer.maxAlternatives = 1;
+
+  recognizer.addEventListener("start", () => { escuchando = true; micBtn.classList.add("listening"); });
+  recognizer.addEventListener("end", () => { escuchando = false; micBtn.classList.remove("listening"); });
+  recognizer.addEventListener("error", () => {
+    escuchando = false;
+    micBtn.classList.remove("listening");
+    toast("🎙️ No se pudo escuchar (revisa el permiso de micrófono)");
+  });
+  recognizer.addEventListener("result", (e) => {
+    procesarComandoVoz(e.results[0][0].transcript);
+  });
+
+  micBtn.addEventListener("click", () => {
+    if (escuchando) { recognizer.stop(); return; }
+    try { recognizer.start(); } catch (err) { /* ya estaba escuchando */ }
+  });
+} else {
+  micBtn.disabled = true;
+  micBtn.title = "Comando de voz no disponible en este navegador (usa Chrome)";
+  micBtn.style.opacity = "0.4";
+}
+
+/* ---------------------------------------------------------------
+   Arranque
+--------------------------------------------------------------- */
+showTab("entrenar");
+
+})();
+</script>
+</body>
+</html>
