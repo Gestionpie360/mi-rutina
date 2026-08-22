@@ -255,6 +255,9 @@ textarea { resize: vertical; min-height: 60px; }
 .exercise-badge { font-size: .72rem; color: var(--accent); font-weight: 700; }
 .exercise-hint { font-size: .78rem; color: var(--text-dim); margin: 4px 0 6px; }
 .exercise-volumen { font-size: .78rem; color: var(--ok); font-weight: 700; margin-top: 4px; }
+.block-vol-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.block-vol-row .exercise-volumen { margin-top: 0; }
+.block-vol-row .icon-btn { font-size: .74rem; white-space: nowrap; }
 
 .session-summary {
   display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
@@ -758,6 +761,11 @@ function showTab(tab) {
   });
   document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
   document.querySelectorAll(".bn-btn").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  // El micrófono y el botón del cronómetro solo sirven mientras entrenas —
+  // en el resto de las pestañas solo estorban (llegaron a taparse con
+  // controles propios de esas vistas, como eliminar un bloque en Rutina).
+  document.getElementById("timerFab").hidden = tab !== "entrenar";
+  document.querySelector(".mic-cluster").hidden = tab !== "entrenar";
   if (tab === "entrenar") renderEntrenar();
   if (tab === "rutina") renderRutina();
   if (tab === "historial") renderHistorial();
@@ -866,6 +874,7 @@ function blockEdit(dia, b) {
         <input type="number" min="0" step="5" class="descanso-input" data-day="${dia.id}" data-block="${b.key}" value="${descansoBloque(dia, b.key)}">
         <span>s</span>
       </div>
+      <button class="icon-btn" data-act="del-bloque" data-day="${dia.id}" data-block="${b.key}" title="Eliminar bloque completo">🗑️</button>
     </div>
     <div class="block-body" id="${bodyId}" hidden>
       ${b.ejercicios.map((e) => exerciseRowEdit(dia, e)).join("")}
@@ -971,6 +980,18 @@ async function rutinaClickHandler(e) {
     const ok = await modalConfirm("Eliminar ejercicio", `¿Eliminar "${exObj.nombre}"?`);
     if (ok) {
       diaForEj.ejercicios = diaForEj.ejercicios.filter((x) => x.id !== exObj.id);
+      persistRoutines(); renderRutina();
+    }
+  } else if (act === "del-bloque") {
+    const d = getDay(routine, btn.dataset.day);
+    const bloques = agruparPorBloque(d.ejercicios);
+    const bloque = bloques.find((b) => b.key === btn.dataset.block);
+    if (!bloque) return;
+    const nombres = bloque.ejercicios.map((x) => x.nombre).join(", ");
+    const ok = await modalConfirm("Eliminar bloque", `¿Eliminar todo el bloque completo? Se borran sus ${bloque.ejercicios.length} ejercicio(s): ${nombres}.`);
+    if (ok) {
+      const idsBorrar = new Set(bloque.ejercicios.map((x) => x.id));
+      d.ejercicios = d.ejercicios.filter((x) => !idsBorrar.has(x.id));
       persistRoutines(); renderRutina();
     }
   } else if (act === "add-serie" && exObj) {
@@ -1144,7 +1165,10 @@ function renderSesionActiva() {
           </tbody>
         </table>
         </div>
-        <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
+        <div class="block-vol-row">
+          <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
+          <button class="icon-btn" data-vaciar-block="${b.key}" title="Vaciar los datos de este bloque">🗑️ Vaciar</button>
+        </div>
       </div>
     </div>`;
   });
@@ -1189,6 +1213,20 @@ function renderSesionActiva() {
       bloqueActivoKey = btn.dataset.timerBlock;
       resaltarBloqueActivo();
       startTimer(descansoBloque(dia, btn.dataset.timerBlock));
+    });
+  });
+  cont.querySelectorAll("[data-vaciar-block]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const bloque = bloques.find((b) => b.key === btn.dataset.vaciarBlock);
+      if (!bloque) return;
+      const ok = await modalConfirm("Vaciar bloque", `¿Borrar todas las reps/kg cargadas en este bloque (${bloque.ejercicios.map((x) => x.nombre).join(" + ")})? El resto de la sesión no se toca.`);
+      if (ok) {
+        bloque.ejercicios.forEach((ex) => {
+          entrenoActual.log[ex.id] = entrenoActual.log[ex.id].map(() => ({ reps: "", kg: "" }));
+        });
+        renderSesionActiva();
+        toast("🗑️ Bloque vaciado");
+      }
     });
   });
   document.getElementById("en_cancelar").addEventListener("click", async () => {
@@ -1873,21 +1911,39 @@ let escuchando = false;
 let fragmentoPendiente = "";
 let fragmentoPendienteTimeout = null;
 
+let huboResultado = false; // si termina de escuchar sin esto, Chrome no devolvió nada
+let huboError = false;
+
 if (SpeechRecognitionCtor) {
   recognizer = new SpeechRecognitionCtor();
-  recognizer.lang = "es-CL";
+  recognizer.lang = "es-419";
   recognizer.continuous = false;
   recognizer.interimResults = false;
   recognizer.maxAlternatives = 1;
 
-  recognizer.addEventListener("start", () => { escuchando = true; micBtn.classList.add("listening"); });
-  recognizer.addEventListener("end", () => { escuchando = false; micBtn.classList.remove("listening"); });
-  recognizer.addEventListener("error", () => {
+  recognizer.addEventListener("start", () => {
+    escuchando = true;
+    huboResultado = false;
+    huboError = false;
+    micBtn.classList.add("listening");
+  });
+  recognizer.addEventListener("end", () => {
     escuchando = false;
     micBtn.classList.remove("listening");
-    toast("🎙️ No se pudo escuchar (revisa el permiso de micrófono)");
+    // Antes esto quedaba en silencio total si Chrome no alcanzaba a devolver
+    // texto (se veía "no pasa nada"). Ahora siempre se avisa algo.
+    if (!huboResultado && !huboError) {
+      toast("🎙️ No se detectó ninguna frase. Revisa el volumen/micrófono e inténtalo de nuevo.");
+    }
+  });
+  recognizer.addEventListener("error", (e) => {
+    escuchando = false;
+    huboError = true;
+    micBtn.classList.remove("listening");
+    toast(`🎙️ No se pudo escuchar (${e.error === "not-allowed" ? "revisa el permiso de micrófono" : e.error})`);
   });
   recognizer.addEventListener("result", (e) => {
+    huboResultado = true;
     const transcript = e.results[0][0].transcript;
     const textoAProcesar = fragmentoPendiente ? `${fragmentoPendiente} ${transcript}` : transcript;
     let entendido = false;
