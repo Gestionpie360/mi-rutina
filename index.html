@@ -206,7 +206,19 @@ textarea { resize: vertical; min-height: 60px; }
 .block-descanso input { width: 56px; margin: 0; padding: 4px 6px; text-align: center; }
 .block-body { padding: 0 10px 10px; }
 
-/* Bloque en modo Entrenar */
+/* Bloque en modo Entrenar (acordeón: uno abierto a la vez) */
+.block-train { padding: 0; }
+.block-header-train {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px; cursor: pointer;
+}
+.block-cerrado .block-header-train { padding: 12px 14px; }
+.block-hamburguesa { font-size: 1.15rem; color: var(--text-dim); }
+.block-titles { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.block-titles h3 { margin: 0; text-transform: none; letter-spacing: 0; color: var(--text); font-size: .98rem; font-weight: 700; }
+.block-summary { font-size: .78rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.block-body-train { padding: 0 14px 14px; }
+.block-train.block-abierto { border-color: var(--accent); }
 .block-exlist { margin-bottom: 6px; }
 .block-exname {
   display: flex; justify-content: space-between; align-items: center;
@@ -317,6 +329,18 @@ textarea { resize: vertical; min-height: 60px; }
 }
 .block-train.block-activo { outline: 2px solid var(--accent); outline-offset: -2px; }
 
+.mic-help-btn {
+  position: fixed; left: 74px; bottom: 90px; z-index: 30;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--bg-elev); color: var(--text-dim); font-size: .8rem; font-weight: 700;
+  box-shadow: var(--shadow); cursor: pointer;
+}
+@media (min-width: 760px) { .mic-help-btn { bottom: 24px; } }
+
+.tabla-ayuda-voz { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: .84rem; }
+.tabla-ayuda-voz td { padding: 7px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tabla-ayuda-voz td:first-child { white-space: nowrap; color: var(--accent); font-weight: 700; padding-right: 10px; }
+
 .badge {
   display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px;
   border-radius: 999px; background: var(--border); color: var(--text-dim);
@@ -415,6 +439,7 @@ textarea { resize: vertical; min-height: 60px; }
 
 <button id="timerFab" class="timer-fab" title="Cronómetro de descanso">⏱️</button>
 <button id="micFab" class="mic-fab" title="Comando de voz">🎙️</button>
+<button id="micHelpBtn" class="mic-help-btn" title="Cómo usar el comando de voz">❓</button>
 
 <nav class="bottomnav" id="bottomnav">
   <button class="bn-btn active" data-tab="entrenar"><span>🏋️</span>Entrenar</button>
@@ -439,6 +464,7 @@ const LS = {
   sessions: "rutina_sessions_v1",
   activeRoutine: "rutina_active_routine_v1",
 };
+const LS_VOZ_AYUDA_VISTA = "rutina_voz_ayuda_vista_v1";
 
 function loadJSON(key, fallback) {
   try {
@@ -690,6 +716,21 @@ function modalFinalizarSesion(volTotal) {
         comentarios: o.querySelector("#modalComentarios").value,
       }) },
   ]);
+}
+function modalAyudaVoz() {
+  return modalBase("Cómo usar el comando de voz", `
+    <p>Toca 🎙️, di tu frase y suelta — no queda escuchando todo el rato.</p>
+    <table class="tabla-ayuda-voz">
+      <tr><td>"1.1 S1 doce veinte"</td><td>Llena la Serie 1 del ejercicio 1.1 con 12 reps y 20 kg. Funciona con cualquier ejercicio y serie (ej. "1.2 S3 diez quince").</td></tr>
+      <tr><td>"doce veinte"</td><td>Sin decir ejercicio ni serie: llena la próxima serie vacía del bloque abierto.</td></tr>
+      <tr><td>"hollow doce veinte"</td><td>Nombra el ejercicio dentro del bloque abierto en vez del número.</td></tr>
+      <tr><td>"descanso"</td><td>Inicia el cronómetro con la duración del bloque abierto.</td></tr>
+      <tr><td>"siguiente" / "anterior"</td><td>Cambia el bloque abierto.</td></tr>
+      <tr><td>"ir a rutina / historial / perfil / datos"</td><td>Cambia de pestaña.</td></tr>
+    </table>
+    <p><b>¿Te equivocaste?</b> Vuelve a decir el mismo ejercicio y serie con los números correctos
+    (ej. "1.1 S1 catorce veintidós") — reemplaza el valor anterior, no lo duplica.</p>
+  `, [{ label: "Entendido", value: true }]);
 }
 function volumenEjercicio(seriesLog) {
   return seriesLog.reduce((acc, s) => {
@@ -1031,45 +1072,53 @@ function renderSesionActiva() {
     const maxRondas = Math.max(...b.ejercicios.map((e) => entrenoActual.log[e.id].length));
     const volBloque = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
     const titulo = b.numero != null ? `Bloque ${b.numero}` : "Ejercicio";
+    const resumen = b.ejercicios.map((e) => esc(e.nombre)).join(" + ");
+    const abierto = b.key === bloqueActivoKey;
 
-    html += `<div class="exercise-card block-train" data-block-key="${b.key}">
-      <div class="exercise-card-head">
-        <h3>${titulo}</h3>
+    html += `<div class="exercise-card block-train ${abierto ? "block-abierto" : "block-cerrado"}" data-block-key="${b.key}">
+      <div class="block-header-train" data-toggle-train="${b.key}">
+        <span class="block-hamburguesa">☰</span>
+        <div class="block-titles">
+          <h3>${titulo}</h3>
+          <span class="block-summary">${resumen}</span>
+        </div>
       </div>
-      <div class="block-exlist">
-        ${b.ejercicios.map((e) => `
-          <div class="block-exname">
-            <span>${esc(e.grupo)} ${esc(e.nombre)}</span>
-            <a href="${linkEjercicio(e)}" target="_blank" rel="noopener" class="icon-btn" title="Ver cómo se hace">▶️</a>
-          </div>
-          ${e.indicaciones ? `<div class="exercise-hint">${esc(e.indicaciones)}</div>` : ""}
-        `).join("")}
-      </div>
-      <div class="table-scroll">
-      <table class="series-table block-table">
-        <thead>
-          <tr>
-            <th></th>
-            ${b.ejercicios.map((e) => `<th colspan="2">${esc(e.grupo)}</th>`).join("")}
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${Array.from({ length: maxRondas }, (_, i) => `
+      <div class="block-body-train" ${abierto ? "" : "hidden"}>
+        <div class="block-exlist">
+          ${b.ejercicios.map((e) => `
+            <div class="block-exname">
+              <span>${esc(e.grupo)} ${esc(e.nombre)}</span>
+              <a href="${linkEjercicio(e)}" target="_blank" rel="noopener" class="icon-btn" title="Ver cómo se hace">▶️</a>
+            </div>
+            ${e.indicaciones ? `<div class="exercise-hint">${esc(e.indicaciones)}</div>` : ""}
+          `).join("")}
+        </div>
+        <div class="table-scroll">
+        <table class="series-table block-table">
+          <thead>
             <tr>
-              <td class="serie-num">S${i + 1}</td>
-              ${b.ejercicios.map((e) => {
-                const s = entrenoActual.log[e.id][i];
-                if (!s) return `<td colspan="2">-</td>`;
-                return `<td><input inputmode="numeric" placeholder="reps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
-                <td><input inputmode="decimal" placeholder="kg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
-              }).join("")}
-              <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" title="Iniciar descanso del bloque">⏱️</button></td>
-            </tr>`).join("")}
-        </tbody>
-      </table>
+              <th></th>
+              ${b.ejercicios.map((e) => `<th colspan="2">${esc(e.grupo)}</th>`).join("")}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Array.from({ length: maxRondas }, (_, i) => `
+              <tr>
+                <td class="serie-num">S${i + 1}</td>
+                ${b.ejercicios.map((e) => {
+                  const s = entrenoActual.log[e.id][i];
+                  if (!s) return `<td colspan="2">-</td>`;
+                  return `<td><input inputmode="numeric" placeholder="reps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
+                  <td><input inputmode="decimal" placeholder="kg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
+                }).join("")}
+                <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" title="Iniciar descanso del bloque">⏱️</button></td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+        </div>
+        <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
       </div>
-      <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
     </div>`;
   });
 
@@ -1085,6 +1134,12 @@ function renderSesionActiva() {
       entrenoActual.log[t.dataset.ej][+t.dataset.idx][t.dataset.field] = t.value;
       updateVolumenLive();
     }
+  });
+  cont.querySelectorAll("[data-toggle-train]").forEach((h) => {
+    h.addEventListener("click", () => {
+      if (bloqueActivoKey === h.dataset.toggleTrain) return;
+      activarBloqueEntreno(h.dataset.toggleTrain);
+    });
   });
   cont.addEventListener("focusin", (e) => {
     const card = e.target.closest("[data-block-key]");
@@ -1111,16 +1166,20 @@ function resaltarBloqueActivo() {
   });
 }
 
+function activarBloqueEntreno(key, opts) {
+  bloqueActivoKey = key;
+  renderSesionActiva();
+  const el = document.querySelector(`.block-train[data-block-key="${CSS.escape(key)}"]`);
+  if (el && opts && opts.scroll) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 function moverBloqueActivo(delta) {
   const bloques = bloquesActuales();
   if (!bloques.length) { toast("🎙️ No hay bloques en este día"); return; }
   let idx = bloques.findIndex((b) => b.key === bloqueActivoKey);
   if (idx === -1) idx = 0;
   idx = Math.max(0, Math.min(bloques.length - 1, idx + delta));
-  bloqueActivoKey = bloques[idx].key;
-  resaltarBloqueActivo();
-  const el = document.querySelector(`.block-train[data-block-key="${CSS.escape(bloqueActivoKey)}"]`);
-  if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+  activarBloqueEntreno(bloques[idx].key, { scroll: true });
   toast(`🎙️ ${bloques[idx].numero != null ? "Bloque " + bloques[idx].numero : "Ejercicio"} activo`);
 }
 
@@ -1469,41 +1528,180 @@ const NUMEROS_TEXTO = {
 function palabraANumero(palabra) {
   return NUMEROS_TEXTO[palabra.toLowerCase().replace(/[^a-záéíóúñ]/gi, "")];
 }
-function extraerNumeros(texto) {
-  const limpio = texto.toLowerCase()
+function normalizarNumerosCompuestos(texto) {
+  return texto.toLowerCase()
     .replace(/veintiún|veintiuno/g, "veinte y uno").replace(/veintidós|veintidos/g, "veinte y dos")
     .replace(/veintitrés|veintitres/g, "veinte y tres").replace(/veinticuatro/g, "veinte y cuatro")
     .replace(/veinticinco/g, "veinte y cinco").replace(/veintiséis|veintiseis/g, "veinte y seis")
     .replace(/veintisiete/g, "veinte y siete").replace(/veintiocho/g, "veinte y ocho")
     .replace(/veintinueve/g, "veinte y nueve");
+}
+function sinTildes(s) {
+  return s.normalize("NFD").replace(/\p{Mark}/gu, "");
+}
+
+const UNIDAD_REPS = /^(rep|reps|repes|repeticion|repeticiones)$/;
+const UNIDAD_KG = /^(kilo|kilos|kg|kgs|peso|pesos)$/;
+
+// Extrae reps y kg de una frase, sin importar el orden en que se digan
+// ("doce veinte", "veinte kilos doce repeticiones", "doce por veinte"…).
+// Usa las palabras "reps/kilos" para saber cuál número es cuál; si no hay
+// pistas, asume que el primer número dicho son las reps y el segundo los kg.
+function extraerRepsKgDeVoz(texto) {
+  const limpio = normalizarNumerosCompuestos(texto);
   const tokens = limpio.split(/\s+/);
-  const numeros = [];
+  const hallados = []; // {valor, unidad, inicio, fin}
   let acumulado = null;
-  tokens.forEach((tok) => {
+  let inicioIdx = null;
+
+  function cerrarNumero(finIdx) {
+    if (acumulado != null) {
+      hallados.push({ valor: acumulado, unidad: null, inicio: inicioIdx, fin: finIdx });
+      acumulado = null;
+      inicioIdx = null;
+    }
+  }
+
+  tokens.forEach((tok, i) => {
     const digito = /^\d+$/.test(tok) ? parseInt(tok, 10) : palabraANumero(tok);
     if (digito != null) {
       if (acumulado != null && acumulado >= 20 && acumulado % 10 === 0 && digito < 10) {
         acumulado += digito;
-      } else if (acumulado != null) {
-        numeros.push(acumulado);
-        acumulado = digito;
       } else {
+        cerrarNumero(i - 1);
         acumulado = digito;
+        inicioIdx = i;
       }
-    } else if (tok !== "y" && acumulado != null) {
-      numeros.push(acumulado);
-      acumulado = null;
+    } else if (tok !== "y") {
+      cerrarNumero(i - 1);
     }
   });
-  if (acumulado != null) numeros.push(acumulado);
-  return numeros;
+  cerrarNumero(tokens.length - 1);
+
+  function esTokenNumero(tok) {
+    return /^\d+$/.test(tok) || palabraANumero(tok) != null;
+  }
+  hallados.forEach((h) => {
+    // Busca la unidad ("reps"/"kg") pegada a este número, sin cruzar hacia
+    // el número vecino (si no, "veinte kilos doce reps" le pegaría el
+    // "kilos" al doce también).
+    for (let j = h.fin + 1; j < tokens.length; j++) {
+      if (esTokenNumero(tokens[j])) break;
+      if (UNIDAD_REPS.test(tokens[j])) { h.unidad = "reps"; break; }
+      if (UNIDAD_KG.test(tokens[j])) { h.unidad = "kg"; break; }
+    }
+    if (h.unidad) return;
+    for (let j = h.inicio - 1; j >= 0; j--) {
+      if (esTokenNumero(tokens[j])) break;
+      if (UNIDAD_REPS.test(tokens[j])) { h.unidad = "reps"; break; }
+      if (UNIDAD_KG.test(tokens[j])) { h.unidad = "kg"; break; }
+    }
+  });
+
+  const conReps = hallados.find((h) => h.unidad === "reps");
+  const conKg = hallados.find((h) => h.unidad === "kg");
+  if (conReps && conKg) return { reps: conReps.valor, kg: conKg.valor };
+  if (hallados.length >= 2) return { reps: hallados[0].valor, kg: hallados[1].valor };
+  return null;
 }
 
-function dictarSerie(reps, kg) {
+const ORDINALES_VOZ = [
+  /\bprimer|\buno\b|\b1\b/,
+  /\bsegundo\b|\bdos\b|\b2\b/,
+  /\btercero\b|\btres\b|\b3\b/,
+  /\bcuarto\b|\bcuatro\b|\b4\b/,
+];
+// Reconoce a qué ejercicio del bloque activo se refiere la frase: por
+// ordinal ("el segundo", "primero") o porque menciona parte de su nombre
+// ("press banco doce veinte"). Si no reconoce ninguno, devuelve null y
+// dictarSerie cae de vuelta al orden por defecto del bloque.
+function identificarEjercicioDeVoz(texto, bloque) {
+  const t = sinTildes(texto.toLowerCase());
+  for (let i = 0; i < ORDINALES_VOZ.length && i < bloque.ejercicios.length; i++) {
+    if (ORDINALES_VOZ[i].test(t)) return bloque.ejercicios[i];
+  }
+  let mejor = null;
+  let mejorLargo = 0;
+  bloque.ejercicios.forEach((ex) => {
+    const palabras = sinTildes(ex.nombre.toLowerCase()).split(/\s+/).filter((w) => w.length > 3);
+    palabras.forEach((palabra) => {
+      if (t.includes(palabra) && palabra.length > mejorLargo) { mejor = ex; mejorLargo = palabra.length; }
+    });
+  });
+  return mejor;
+}
+
+// Reconoce el número de ejercicio ("1.1", "1,1", o dicho "uno punto uno")
+// y lo separa del resto de la frase, para que esos dígitos no se confundan
+// después con las reps/kg.
+function extraerGrupoYRestante(texto) {
+  const directo = texto.match(/\b([1-9])\s*(?:[.,]|punto|coma)\s*([1-9])\b/);
+  if (directo) {
+    return {
+      grupo: `${directo[1]}.${directo[2]}`,
+      resto: texto.slice(0, directo.index) + " " + texto.slice(directo.index + directo[0].length),
+    };
+  }
+  const tokens = texto.split(/\s+/);
+  for (let i = 0; i < tokens.length - 2; i++) {
+    const a = NUMEROS_TEXTO[tokens[i]];
+    const conector = tokens[i + 1];
+    const b = NUMEROS_TEXTO[tokens[i + 2]];
+    if (a >= 1 && a <= 9 && /^(punto|coma)$/.test(conector) && b >= 1 && b <= 9) {
+      return { grupo: `${a}.${b}`, resto: tokens.slice(0, i).concat(tokens.slice(i + 3)).join(" ") };
+    }
+  }
+  return { grupo: null, resto: texto };
+}
+// Reconoce la serie dicha ("s1", "s 1", "serie 1", "serie uno", "ese dos")
+// y la separa del resto de la frase.
+function extraerSerieYRestante(texto) {
+  const tokens = texto.split(/\s+/);
+  for (let i = 0; i < tokens.length; i++) {
+    const pegado = tokens[i].match(/^s(\d+)$/i);
+    if (pegado) {
+      return { serie: parseInt(pegado[1], 10), resto: tokens.slice(0, i).concat(tokens.slice(i + 1)).join(" ") };
+    }
+    if (["s", "ese", "serie"].includes(tokens[i]) && tokens[i + 1] != null) {
+      const sig = tokens[i + 1];
+      const num = /^\d+$/.test(sig) ? parseInt(sig, 10) : NUMEROS_TEXTO[sig];
+      if (num != null) {
+        return { serie: num, resto: tokens.slice(0, i).concat(tokens.slice(i + 2)).join(" ") };
+      }
+    }
+  }
+  return { serie: null, resto: texto };
+}
+function buscarEjercicioPorGrupoActual(grupoTexto) {
+  if (!entrenoActual) return null;
+  const routine = getRoutine(entrenoActual.routineId);
+  const dia = getDay(routine, entrenoActual.dayId);
+  return dia.ejercicios.find((e) => e.grupo === grupoTexto) || null;
+}
+
+function dictarSerie(reps, kg, ejercicioForzado, serieNumero) {
   const bloques = bloquesActuales();
   const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
   if (!bloque) { toast("🎙️ No hay bloque activo"); return; }
-  for (const ex of bloque.ejercicios) {
+
+  // Con serie explícita ("1.1 S1 12 20") se escribe esa celda directamente,
+  // exista o no un valor previo — así te corriges diciendo lo mismo de nuevo.
+  if (serieNumero) {
+    const ex = ejercicioForzado || bloque.ejercicios[0];
+    const serieLog = entrenoActual.log[ex.id];
+    const idx = serieNumero - 1;
+    if (idx < 0 || idx >= serieLog.length) {
+      toast(`🎙️ "${ex.nombre}" no tiene una serie ${serieNumero}`);
+      return;
+    }
+    serieLog[idx] = { reps: String(reps), kg: String(kg) };
+    renderSesionActiva();
+    toast(`🎙️ ${ex.grupo} S${serieNumero}: ${reps} reps × ${kg} kg`);
+    return;
+  }
+
+  const candidatos = ejercicioForzado ? [ejercicioForzado] : bloque.ejercicios;
+  for (const ex of candidatos) {
     const serieLog = entrenoActual.log[ex.id];
     for (let i = 0; i < serieLog.length; i++) {
       if (serieLog[i].reps === "" && serieLog[i].kg === "") {
@@ -1515,7 +1713,11 @@ function dictarSerie(reps, kg) {
       }
     }
   }
-  toast("🎙️ Ese bloque ya tiene todas las series llenas");
+  if (ejercicioForzado) {
+    toast(`🎙️ "${ejercicioForzado.nombre}" ya tiene todas sus series llenas`);
+  } else {
+    toast("🎙️ Ese bloque ya tiene todas las series llenas");
+  }
 }
 
 function procesarComandoVoz(transcriptOriginal) {
@@ -1548,11 +1750,28 @@ function procesarComandoVoz(transcriptOriginal) {
     return;
   }
 
-  const numeros = extraerNumeros(t);
-  if (numeros.length >= 2) {
+  const { grupo: grupoDicho, resto: sinGrupo } = extraerGrupoYRestante(t);
+  const { serie: serieDicha, resto: textoLimpio } = extraerSerieYRestante(sinGrupo);
+  const parRepsKg = extraerRepsKgDeVoz(textoLimpio);
+
+  if (parRepsKg) {
     if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
     showTab("entrenar");
-    dictarSerie(numeros[0], numeros[1]);
+
+    let ejercicioForzado = null;
+    if (grupoDicho) {
+      ejercicioForzado = buscarEjercicioPorGrupoActual(grupoDicho);
+      if (!ejercicioForzado) { toast(`🎙️ No encontré el ejercicio ${grupoDicho}`); return; }
+      const bloques = bloquesActuales();
+      const suBloque = bloques.find((b) => b.ejercicios.some((e) => e.id === ejercicioForzado.id));
+      if (suBloque) bloqueActivoKey = suBloque.key;
+    } else {
+      const bloques = bloquesActuales();
+      const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
+      ejercicioForzado = bloque ? identificarEjercicioDeVoz(t, bloque) : null;
+    }
+
+    dictarSerie(parRepsKg.reps, parRepsKg.kg, ejercicioForzado, serieDicha);
     return;
   }
   toast(`🎙️ No entendí: "${transcriptOriginal}"`);
@@ -1560,6 +1779,7 @@ function procesarComandoVoz(transcriptOriginal) {
 
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 const micBtn = document.getElementById("micFab");
+document.getElementById("micHelpBtn").addEventListener("click", () => modalAyudaVoz());
 let recognizer = null;
 let escuchando = false;
 
@@ -1581,8 +1801,12 @@ if (SpeechRecognitionCtor) {
     procesarComandoVoz(e.results[0][0].transcript);
   });
 
-  micBtn.addEventListener("click", () => {
+  micBtn.addEventListener("click", async () => {
     if (escuchando) { recognizer.stop(); return; }
+    if (!localStorage.getItem(LS_VOZ_AYUDA_VISTA)) {
+      await modalAyudaVoz();
+      localStorage.setItem(LS_VOZ_AYUDA_VISTA, "1");
+    }
     try { recognizer.start(); } catch (err) { /* ya estaba escuchando */ }
   });
 } else {
