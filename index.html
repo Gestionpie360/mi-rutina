@@ -1032,6 +1032,7 @@ function renderEntrenar() {
   const routine = getRoutine(activeRoutineId);
 
   if (!entrenoActual) {
+    sel.hidden = false;
     sel.innerHTML = `
       <h2>Comenzar entrenamiento</h2>
       <label>Rutina</label>
@@ -1052,6 +1053,7 @@ function renderEntrenar() {
     return;
   }
 
+  sel.hidden = true;
   sel.innerHTML = "";
   renderSesionActiva();
 }
@@ -1954,7 +1956,13 @@ let huboError = false;
 if (SpeechRecognitionCtor) {
   recognizer = new SpeechRecognitionCtor();
   recognizer.lang = "es-419";
-  recognizer.continuous = false;
+  // Modo continuo: tocas 🎙️ UNA vez y queda escuchando (punteo rojo) durante
+  // toda la frase, con pausas y todo — no se corta apenas detecta un
+  // silencio como pasaba en modo por-frase. Se apaga SOLO cuando tú tocas
+  // 🎙️ de nuevo o cuando Chrome termina la sesión por su cuenta — a
+  // diferencia del primer intento con modo continuo, aquí NO se reinicia
+  // solo, que era justo lo que lo dejaba pegado sin apagarse nunca.
+  recognizer.continuous = true;
   recognizer.interimResults = false;
   recognizer.maxAlternatives = 1;
 
@@ -1980,28 +1988,33 @@ if (SpeechRecognitionCtor) {
     toast(`🎙️ No se pudo escuchar (${e.error === "not-allowed" ? "revisa el permiso de micrófono" : e.error})`);
   });
   recognizer.addEventListener("result", (e) => {
-    huboResultado = true;
-    const transcript = e.results[0][0].transcript;
-    const textoAProcesar = fragmentoPendiente ? `${fragmentoPendiente} ${transcript}` : transcript;
-    let entendido = false;
-    try {
-      entendido = procesarComandoVoz(textoAProcesar);
-    } catch (err) {
-      toast(`🎙️ No pude procesar "${textoAProcesar}"`);
-      entendido = true; // ya se avisó del error, no seguir acumulando esto
-    }
-    clearTimeout(fragmentoPendienteTimeout);
-    if (entendido) {
-      fragmentoPendiente = "";
-    } else if (fragmentoPendiente) {
-      // ya se había esperado una vez y aun junto no se entendió: se descarta
-      fragmentoPendiente = "";
-      toast(`🎙️ No entendí: "${textoAProcesar}"`);
-    } else {
-      // primera vez que no se entiende: puede ser la primera mitad de la
-      // frase — se espera unos segundos por el resto antes de avisar
-      fragmentoPendiente = transcript;
-      fragmentoPendienteTimeout = setTimeout(() => { fragmentoPendiente = ""; }, 6000);
+    // En modo continuo pueden llegar varios resultados nuevos en un mismo
+    // evento (uno por cada pausa que Chrome detectó dentro de la frase).
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (!e.results[i].isFinal) continue;
+      huboResultado = true;
+      const transcript = e.results[i][0].transcript;
+      const textoAProcesar = fragmentoPendiente ? `${fragmentoPendiente} ${transcript}` : transcript;
+      let entendido = false;
+      try {
+        entendido = procesarComandoVoz(textoAProcesar);
+      } catch (err) {
+        toast(`🎙️ No pude procesar "${textoAProcesar}"`);
+        entendido = true; // ya se avisó del error, no seguir acumulando esto
+      }
+      clearTimeout(fragmentoPendienteTimeout);
+      if (entendido) {
+        fragmentoPendiente = "";
+      } else if (fragmentoPendiente) {
+        // ya se había esperado una vez y aun junto no se entendió: se descarta
+        fragmentoPendiente = "";
+        toast(`🎙️ No entendí: "${textoAProcesar}"`);
+      } else {
+        // primera vez que no se entiende: puede ser la primera mitad de la
+        // frase — se espera unos segundos por el resto antes de avisar
+        fragmentoPendiente = transcript;
+        fragmentoPendienteTimeout = setTimeout(() => { fragmentoPendiente = ""; }, 6000);
+      }
     }
   });
 
