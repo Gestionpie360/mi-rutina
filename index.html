@@ -1638,19 +1638,37 @@ function extraerRepsKgDeVoz(texto) {
   const hallados = []; // {valor, unidad, inicio, fin}
   let acumulado = null;
   let inicioIdx = null;
+  let modoDecimal = false; // recién se dijo "punto"/"coma": el próximo número es la fracción
 
   function cerrarNumero(finIdx) {
     if (acumulado != null) {
       hallados.push({ valor: acumulado, unidad: null, inicio: inicioIdx, fin: finIdx });
       acumulado = null;
       inicioIdx = null;
+      modoDecimal = false;
     }
   }
 
   tokens.forEach((tok, i) => {
-    const digito = /^\d+$/.test(tok) ? parseInt(tok, 10) : palabraANumero(tok);
+    // número escrito tal cual, con o sin decimales: "7", "7.5", "7,5"
+    const literal = tok.match(/^(\d+)(?:[.,](\d+))?$/);
+    if (literal) {
+      cerrarNumero(i - 1);
+      acumulado = literal[2] != null ? parseFloat(`${literal[1]}.${literal[2]}`) : parseInt(literal[1], 10);
+      inicioIdx = i;
+      return;
+    }
+    // "siete punto cinco" / "siete coma cinco" -> 7.5 (kilos con decimales)
+    if (/^(punto|coma)$/.test(tok) && acumulado != null) {
+      modoDecimal = true;
+      return;
+    }
+    const digito = palabraANumero(tok);
     if (digito != null) {
-      if (acumulado != null && acumulado >= 20 && acumulado % 10 === 0 && digito < 10) {
+      if (modoDecimal) {
+        acumulado += digito / (digito < 10 ? 10 : 100);
+        modoDecimal = false;
+      } else if (acumulado != null && acumulado >= 20 && acumulado % 10 === 0 && digito < 10) {
         acumulado += digito;
       } else {
         cerrarNumero(i - 1);
@@ -1664,7 +1682,7 @@ function extraerRepsKgDeVoz(texto) {
   cerrarNumero(tokens.length - 1);
 
   function esTokenNumero(tok) {
-    return /^\d+$/.test(tok) || palabraANumero(tok) != null;
+    return /^\d+(?:[.,]\d+)?$/.test(tok) || palabraANumero(tok) != null || /^(punto|coma)$/.test(tok);
   }
   hallados.forEach((h) => {
     // Busca la unidad ("reps"/"kg") pegada a este número, sin cruzar hacia
@@ -1687,6 +1705,25 @@ function extraerRepsKgDeVoz(texto) {
   const conKg = hallados.find((h) => h.unidad === "kg");
   if (conReps && conKg) return { reps: conReps.valor, kg: conKg.valor };
   if (hallados.length >= 2) return { reps: hallados[0].valor, kg: hallados[1].valor };
+  // El reconocedor a veces pega los dos números en uno solo si se dicen muy
+  // seguidos (ej. "8 10" transcrito como "810"). Si solo se encontró un
+  // número de 2+ dígitos y sin unidad, se intenta partirlo en dos valores
+  // razonables para un gimnasio (reps 1-50, kg 0-400) antes de rendirse.
+  if (hallados.length === 1 && Number.isInteger(hallados[0].valor) && String(hallados[0].valor).length >= 2) {
+    const partido = dividirNumeroPegado(String(hallados[0].valor));
+    if (partido) return partido;
+  }
+  return null;
+}
+function dividirNumeroPegado(numStr) {
+  for (let corte = 1; corte < numStr.length; corte++) {
+    const repsStr = numStr.slice(0, corte);
+    const kgStr = numStr.slice(corte);
+    if (kgStr.length > 1 && kgStr[0] === "0") continue; // "08" no es un kg natural
+    const reps = parseInt(repsStr, 10);
+    const kg = parseInt(kgStr, 10);
+    if (reps >= 1 && reps <= 50 && kg >= 0 && kg <= 400) return { reps, kg };
+  }
   return null;
 }
 
