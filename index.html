@@ -1102,6 +1102,10 @@ function primeraRondaIncompleta(bloque) {
   }
   return null;
 }
+// Ningún ejercicio del bloque tiene una sola reps/kg cargada todavía.
+function bloqueSinEmpezar(bloque) {
+  return bloque.ejercicios.every((e) => entrenoActual.log[e.id].every((s) => s.reps === "" && s.kg === ""));
+}
 
 function renderSesionActiva() {
   const cont = document.getElementById("entrenarSesion");
@@ -1215,6 +1219,10 @@ function renderSesionActiva() {
     btn.addEventListener("click", () => {
       const idx = parseInt(btn.dataset.timerIdx, 10);
       const bloqueDelBoton = bloques.find((b) => b.key === btn.dataset.timerBlock);
+      if (bloqueDelBoton && bloqueSinEmpezar(bloqueDelBoton)) {
+        toast("⏱️ Aún no has iniciado este bloque — carga al menos una serie antes de descansar");
+        return;
+      }
       if (bloqueDelBoton && !rondaCompleta(bloqueDelBoton, idx)) {
         toast(`⏱️ Completa reps y kg de la S${idx + 1} en todos los ejercicios del bloque antes de descansar`);
         return;
@@ -1891,6 +1899,10 @@ function procesarComandoVoz(transcriptOriginal) {
     const bloques = bloquesActuales();
     const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
     if (bloque) {
+      if (bloqueSinEmpezar(bloque)) {
+        toast("🎙️ Aún no has iniciado este bloque — carga al menos una serie antes de descansar");
+        return true;
+      }
       const idxIncompleta = primeraRondaIncompleta(bloque);
       if (idxIncompleta != null) {
         toast(`🎙️ Te falta completar la S${idxIncompleta + 1} en todos los ejercicios antes de descansar`);
