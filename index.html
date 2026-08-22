@@ -1986,15 +1986,20 @@ let fragmentoPendienteTimeout = null;
 
 let huboResultado = false; // si termina de escuchar sin esto, Chrome no devolvió nada
 let huboError = false;
-// Intención del usuario (prendido/apagado), separada del estado técnico del
-// reconocedor — se cambia SOLO al tocar 🎙️, así el botón siempre apaga de
-// verdad sin importar qué esté haciendo el reconocedor en ese instante.
-let quiereEscuchar = false;
 
 if (SpeechRecognitionCtor) {
   recognizer = new SpeechRecognitionCtor();
   recognizer.lang = "es-419";
-  recognizer.continuous = true;
+  // El modo continuo se probó tres veces en Android y las tres falló de
+  // formas distintas (no se apagaba, la segunda frase quedaba muda, se
+  // quedaba pegado en rojo sin responder al botón) — es una limitación real
+  // del navegador en ese teléfono, no algo que se arregle con más lógica
+  // desde acá. Se vuelve al modo por-frase, que en todas las pruebas
+  // apagó y encendió sin fallar: cada frase es su propia escucha corta.
+  // Si el comando se dice en dos partes (con pausa), el buffer de abajo
+  // (fragmentoPendiente) las junta igual, aunque haya que tocar 🎙️ de
+  // nuevo entre una parte y la otra.
+  recognizer.continuous = false;
   recognizer.interimResults = false;
   recognizer.maxAlternatives = 1;
 
@@ -2006,13 +2011,6 @@ if (SpeechRecognitionCtor) {
   });
   recognizer.addEventListener("end", () => {
     escuchando = false;
-    // En Android, el modo continuo de Chrome a veces "se queda sordo" tras
-    // reconocer una frase, sin avisar nada — por eso cada frase reconocida
-    // reinicia la escucha (más abajo, en "result"). Si Chrome cerró la
-    // sesión sola y el usuario no pidió apagar el mic, se retoma acá.
-    if (quiereEscuchar) {
-      try { recognizer.start(); return; } catch (err) { /* sigue abajo */ }
-    }
     micBtn.classList.remove("listening");
     if (!huboResultado && !huboError) {
       toast("🎙️ No se detectó ninguna frase. Revisa el volumen/micrófono e inténtalo de nuevo.");
@@ -2021,57 +2019,41 @@ if (SpeechRecognitionCtor) {
   recognizer.addEventListener("error", (e) => {
     escuchando = false;
     huboError = true;
-    // "no-speech" en medio de una escucha continua es normal (silencio entre
-    // una frase y la siguiente) — "end" llega enseguida y reinicia solo.
-    if (e.error === "no-speech" && quiereEscuchar) return;
     micBtn.classList.remove("listening");
     toast(`🎙️ No se pudo escuchar (${e.error === "not-allowed" ? "revisa el permiso de micrófono" : e.error})`);
   });
   recognizer.addEventListener("result", (e) => {
-    // En modo continuo pueden llegar varios resultados nuevos en un mismo
-    // evento (uno por cada pausa que Chrome detectó dentro de la frase).
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (!e.results[i].isFinal) continue;
-      huboResultado = true;
-      const transcript = e.results[i][0].transcript;
-      const textoAProcesar = fragmentoPendiente ? `${fragmentoPendiente} ${transcript}` : transcript;
-      let entendido = false;
-      try {
-        entendido = procesarComandoVoz(textoAProcesar);
-      } catch (err) {
-        toast(`🎙️ No pude procesar "${textoAProcesar}"`);
-        entendido = true; // ya se avisó del error, no seguir acumulando esto
-      }
-      clearTimeout(fragmentoPendienteTimeout);
-      if (entendido) {
-        fragmentoPendiente = "";
-      } else if (fragmentoPendiente) {
-        // ya se había esperado una vez y aun junto no se entendió: se descarta
-        fragmentoPendiente = "";
-        toast(`🎙️ No entendí: "${textoAProcesar}"`);
-      } else {
-        // primera vez que no se entiende: puede ser la primera mitad de la
-        // frase — se espera unos segundos por el resto antes de avisar
-        fragmentoPendiente = transcript;
-        fragmentoPendienteTimeout = setTimeout(() => { fragmentoPendiente = ""; }, 6000);
-      }
+    huboResultado = true;
+    const transcript = e.results[0][0].transcript;
+    const textoAProcesar = fragmentoPendiente ? `${fragmentoPendiente} ${transcript}` : transcript;
+    let entendido = false;
+    try {
+      entendido = procesarComandoVoz(textoAProcesar);
+    } catch (err) {
+      toast(`🎙️ No pude procesar "${textoAProcesar}"`);
+      entendido = true; // ya se avisó del error, no seguir acumulando esto
     }
-    // Refresca la escucha después de cada frase reconocida — evita que la
-    // siguiente frase se pierda en silencio (ver nota arriba en "end").
-    if (quiereEscuchar) recognizer.stop();
+    clearTimeout(fragmentoPendienteTimeout);
+    if (entendido) {
+      fragmentoPendiente = "";
+    } else if (fragmentoPendiente) {
+      // ya se había esperado una vez y aun junto no se entendió: se descarta
+      fragmentoPendiente = "";
+      toast(`🎙️ No entendí: "${textoAProcesar}"`);
+    } else {
+      // primera vez que no se entiende: puede ser la primera mitad de la
+      // frase — se espera unos segundos por el resto antes de avisar
+      fragmentoPendiente = transcript;
+      fragmentoPendienteTimeout = setTimeout(() => { fragmentoPendiente = ""; }, 6000);
+    }
   });
 
   micBtn.addEventListener("click", async () => {
-    if (quiereEscuchar) {
-      quiereEscuchar = false;
-      recognizer.stop();
-      return;
-    }
+    if (escuchando) { recognizer.stop(); return; }
     if (!localStorage.getItem(LS_VOZ_AYUDA_VISTA)) {
       await modalAyudaVoz();
       localStorage.setItem(LS_VOZ_AYUDA_VISTA, "1");
     }
-    quiereEscuchar = true;
     try { recognizer.start(); } catch (err) { /* ya estaba escuchando */ }
   });
 } else {
