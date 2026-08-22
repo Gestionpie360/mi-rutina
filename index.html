@@ -450,6 +450,8 @@ textarea { resize: vertical; min-height: 60px; }
 </nav>
 
 <div id="toast" class="toast" hidden></div>
+<datalist id="dlReps"></datalist>
+<datalist id="dlKg"></datalist>
 
 <script>
 (function () {
@@ -1109,8 +1111,8 @@ function renderSesionActiva() {
                 ${b.ejercicios.map((e) => {
                   const s = entrenoActual.log[e.id][i];
                   if (!s) return `<td colspan="2">-</td>`;
-                  return `<td><input inputmode="numeric" placeholder="reps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
-                  <td><input inputmode="decimal" placeholder="kg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
+                  return `<td><input inputmode="numeric" placeholder="reps" list="dlReps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
+                  <td><input inputmode="decimal" placeholder="kg" list="dlKg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
                 }).join("")}
                 <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" title="Iniciar descanso del bloque">⏱️</button></td>
               </tr>`).join("")}
@@ -1128,22 +1130,28 @@ function renderSesionActiva() {
 
   cont.innerHTML = html;
 
-  cont.addEventListener("input", (e) => {
-    const t = e.target;
-    if (t.dataset.field && t.dataset.ej !== undefined && t.dataset.idx !== undefined) {
-      entrenoActual.log[t.dataset.ej][+t.dataset.idx][t.dataset.field] = t.value;
-      updateVolumenLive();
-    }
-  });
+  // input/focusin van sobre "cont", que es estable entre renders (solo se
+  // reemplaza su innerHTML) — si se agregaran de nuevo cada vez, se
+  // duplicarían sin límite. Se enganchan UNA sola vez con este flag.
+  if (!cont.dataset.wired) {
+    cont.dataset.wired = "1";
+    cont.addEventListener("input", (e) => {
+      const t = e.target;
+      if (t.dataset.field && t.dataset.ej !== undefined && t.dataset.idx !== undefined) {
+        entrenoActual.log[t.dataset.ej][+t.dataset.idx][t.dataset.field] = t.value;
+        updateVolumenLive();
+      }
+    });
+    cont.addEventListener("focusin", (e) => {
+      const card = e.target.closest("[data-block-key]");
+      if (card) { bloqueActivoKey = card.dataset.blockKey; resaltarBloqueActivo(); }
+    });
+  }
   cont.querySelectorAll("[data-toggle-train]").forEach((h) => {
     h.addEventListener("click", () => {
       if (bloqueActivoKey === h.dataset.toggleTrain) return;
       activarBloqueEntreno(h.dataset.toggleTrain);
     });
-  });
-  cont.addEventListener("focusin", (e) => {
-    const card = e.target.closest("[data-block-key]");
-    if (card) { bloqueActivoKey = card.dataset.blockKey; resaltarBloqueActivo(); }
   });
   cont.querySelectorAll("[data-timer-block]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -1639,6 +1647,7 @@ function extraerGrupoYRestante(texto) {
   if (directo) {
     return {
       grupo: `${directo[1]}.${directo[2]}`,
+      explicito: true,
       resto: texto.slice(0, directo.index) + " " + texto.slice(directo.index + directo[0].length),
     };
   }
@@ -1648,10 +1657,21 @@ function extraerGrupoYRestante(texto) {
     const conector = tokens[i + 1];
     const b = NUMEROS_TEXTO[tokens[i + 2]];
     if (a >= 1 && a <= 9 && /^(punto|coma)$/.test(conector) && b >= 1 && b <= 9) {
-      return { grupo: `${a}.${b}`, resto: tokens.slice(0, i).concat(tokens.slice(i + 3)).join(" ") };
+      return { grupo: `${a}.${b}`, explicito: true, resto: tokens.slice(0, i).concat(tokens.slice(i + 3)).join(" ") };
     }
   }
-  return { grupo: null, resto: texto };
+  // Sin "punto"/"coma" explícito: el reconocedor de voz a veces transcribe
+  // "1.1" dicho como "uno uno" sin conector. Se busca ese patrón suelto,
+  // pero SIN cortar el flujo si no calza con ningún ejercicio real — así
+  // "cinco ocho" (5 reps, 8 kg) no se malinterpreta como el ejercicio "5.8".
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const a = /^\d$/.test(tokens[i]) ? parseInt(tokens[i], 10) : NUMEROS_TEXTO[tokens[i]];
+    const b = /^\d$/.test(tokens[i + 1]) ? parseInt(tokens[i + 1], 10) : NUMEROS_TEXTO[tokens[i + 1]];
+    if (a >= 1 && a <= 9 && b >= 1 && b <= 9) {
+      return { grupo: `${a}.${b}`, explicito: false, resto: tokens.slice(0, i).concat(tokens.slice(i + 2)).join(" ") };
+    }
+  }
+  return { grupo: null, explicito: false, resto: texto };
 }
 // Reconoce la serie dicha ("s1", "s 1", "serie 1", "serie uno", "ese dos")
 // y la separa del resto de la frase.
@@ -1750,22 +1770,36 @@ function procesarComandoVoz(transcriptOriginal) {
     return;
   }
 
-  const { grupo: grupoDicho, resto: sinGrupo } = extraerGrupoYRestante(t);
-  const { serie: serieDicha, resto: textoLimpio } = extraerSerieYRestante(sinGrupo);
+  // Resuelve primero el ejercicio (por "1.1", nombre u ordinal) ANTES de
+  // buscar reps/kg: si el número de ejercicio dicho no calza con ninguno
+  // real (y no vino con "punto"/"coma" explícito), se ignora y se usan las
+  // palabras originales completas para no perder esos números como reps/kg.
+  const grupoInfo = extraerGrupoYRestante(t);
+  let ejercicioForzado = null;
+  let textoParaSerie = t;
+
+  if (grupoInfo.grupo) {
+    const encontrado = buscarEjercicioPorGrupoActual(grupoInfo.grupo);
+    if (encontrado) {
+      ejercicioForzado = encontrado;
+      textoParaSerie = grupoInfo.resto;
+      const bloques = bloquesActuales();
+      const suBloque = bloques.find((b) => b.ejercicios.some((e) => e.id === encontrado.id));
+      if (suBloque) bloqueActivoKey = suBloque.key;
+    } else if (grupoInfo.explicito) {
+      toast(`🎙️ No encontré el ejercicio ${grupoInfo.grupo}`);
+      return;
+    }
+  }
+
+  const { serie: serieDicha, resto: textoLimpio } = extraerSerieYRestante(textoParaSerie);
   const parRepsKg = extraerRepsKgDeVoz(textoLimpio);
 
   if (parRepsKg) {
     if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
     showTab("entrenar");
 
-    let ejercicioForzado = null;
-    if (grupoDicho) {
-      ejercicioForzado = buscarEjercicioPorGrupoActual(grupoDicho);
-      if (!ejercicioForzado) { toast(`🎙️ No encontré el ejercicio ${grupoDicho}`); return; }
-      const bloques = bloquesActuales();
-      const suBloque = bloques.find((b) => b.ejercicios.some((e) => e.id === ejercicioForzado.id));
-      if (suBloque) bloqueActivoKey = suBloque.key;
-    } else {
+    if (!ejercicioForzado) {
       const bloques = bloquesActuales();
       const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
       ejercicioForzado = bloque ? identificarEjercicioDeVoz(t, bloque) : null;
@@ -1798,7 +1832,12 @@ if (SpeechRecognitionCtor) {
     toast("🎙️ No se pudo escuchar (revisa el permiso de micrófono)");
   });
   recognizer.addEventListener("result", (e) => {
-    procesarComandoVoz(e.results[0][0].transcript);
+    const transcript = e.results[0][0].transcript;
+    try {
+      procesarComandoVoz(transcript);
+    } catch (err) {
+      toast(`🎙️ No pude procesar "${transcript}" (${err.message})`);
+    }
   });
 
   micBtn.addEventListener("click", async () => {
@@ -1814,6 +1853,21 @@ if (SpeechRecognitionCtor) {
   micBtn.title = "Comando de voz no disponible en este navegador (usa Chrome)";
   micBtn.style.opacity = "0.4";
 }
+
+/* ---------------------------------------------------------------
+   Listas desplegables de reps / kg (datalist: sugiere, pero se puede
+   seguir escribiendo cualquier número que no esté en la lista)
+--------------------------------------------------------------- */
+(function poblarDatalists() {
+  const dlReps = document.getElementById("dlReps");
+  for (let n = 1; n <= 30; n++) {
+    dlReps.appendChild(new Option(n));
+  }
+  const dlKg = document.getElementById("dlKg");
+  for (let n = 0; n <= 100; n += 0.5) {
+    dlKg.appendChild(new Option(n % 1 === 0 ? String(n) : n.toFixed(1)));
+  }
+})();
 
 /* ---------------------------------------------------------------
    Arranque
