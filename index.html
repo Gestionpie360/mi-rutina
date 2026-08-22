@@ -241,11 +241,12 @@ textarea { resize: vertical; min-height: 60px; }
 }
 .series-table .serie-num { font-size: .8rem; color: var(--text-dim); font-weight: 700; }
 .serie-num-btn {
-  background: transparent; border: 1px dashed var(--border); border-radius: 6px;
-  color: var(--text-dim); font-size: .8rem; font-weight: 700; font-family: inherit;
-  padding: 4px 6px; cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border: 1px solid var(--accent); border-radius: 6px;
+  color: var(--accent); font-size: .8rem; font-weight: 700; font-family: inherit;
+  padding: 4px 7px; cursor: pointer;
 }
-.serie-num-btn:hover { background: var(--border); }
+.serie-num-btn:hover, .serie-num-btn:active { background: color-mix(in srgb, var(--accent) 32%, transparent); }
 .serie-del { color: var(--danger); }
 
 .exercise-card {
