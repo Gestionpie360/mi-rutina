@@ -341,19 +341,6 @@ textarea { resize: vertical; min-height: 60px; }
 .tabla-ayuda-voz td { padding: 7px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .tabla-ayuda-voz td:first-child { white-space: nowrap; color: var(--accent); font-weight: 700; padding-right: 10px; }
 
-.voz-panel {
-  position: fixed; left: 16px; right: 16px; bottom: 150px; z-index: 45;
-  max-width: 380px; margin: 0 auto;
-  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 14px;
-  padding: 10px 34px 10px 14px; box-shadow: var(--shadow);
-}
-@media (min-width: 760px) { .voz-panel { left: auto; right: 84px; bottom: 24px; } }
-.voz-panel-close { position: absolute; top: 4px; right: 4px; }
-.voz-panel-label { font-size: .68rem; text-transform: uppercase; color: var(--text-dim); font-weight: 700; letter-spacing: .04em; margin-top: 6px; }
-.voz-panel-label:first-of-type { margin-top: 0; }
-.voz-panel-transcript { font-size: .92rem; font-style: italic; }
-.voz-panel-resultado { font-size: .88rem; }
-
 .badge {
   display: inline-block; font-size: .72rem; font-weight: 700; padding: 2px 8px;
   border-radius: 999px; background: var(--border); color: var(--text-dim);
@@ -465,14 +452,6 @@ textarea { resize: vertical; min-height: 60px; }
 <div id="toast" class="toast" hidden></div>
 <datalist id="dlReps"></datalist>
 <datalist id="dlKg"></datalist>
-
-<div id="vozPanel" class="voz-panel" hidden>
-  <button id="vozPanelClose" class="icon-btn voz-panel-close" title="Cerrar">✕</button>
-  <div class="voz-panel-label">Escuché</div>
-  <div id="vozEscuche" class="voz-panel-transcript"></div>
-  <div class="voz-panel-label">Entendí</div>
-  <div id="vozEntendi" class="voz-panel-resultado"></div>
-</div>
 
 <script>
 (function () {
@@ -660,16 +639,6 @@ function toast(msg) {
   t.hidden = false;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => { t.hidden = true; }, 2200);
-  // Los mensajes del comando de voz (🎙️) además quedan fijos en el panel de
-  // voz, que no se esfuma solo — así se puede ver con calma qué entendió.
-  if (msg.startsWith("🎙️")) {
-    const panel = document.getElementById("vozPanel");
-    const entendi = document.getElementById("vozEntendi");
-    if (panel && entendi) {
-      entendi.textContent = msg.replace(/^🎙️\s*/, "");
-      panel.hidden = false;
-    }
-  }
 }
 
 /* ---------------------------------------------------------------
@@ -752,9 +721,8 @@ function modalFinalizarSesion(volTotal) {
 }
 function modalAyudaVoz() {
   return modalBase("Cómo usar el comando de voz", `
-    <p>Toca 🎙️, di tu frase y suelta — no queda escuchando todo el rato. Después de cada frase
-    aparece un panel con lo que <b>escuché</b> y lo que <b>entendí</b>, para que veas si el problema
-    fue que no te oyó bien o que dijiste algo distinto.</p>
+    <p>Toca 🎙️, di tu frase y suelta — no queda escuchando todo el rato. Si la dices en dos
+    partes con pausa (ej. "1.1" ... "S1 doce veinte"), la app espera y las junta sola.</p>
     <table class="tabla-ayuda-voz">
       <tr><td>"1.1 S1 doce veinte"</td><td>Llena la Serie 1 del ejercicio 1.1 con 12 reps y 20 kg. Funciona con cualquier ejercicio y serie (ej. "1.2 S3 diez quince").</td></tr>
       <tr><td>"doce veinte"</td><td>Sin decir ejercicio ni serie: llena la próxima serie vacía del bloque abierto.</td></tr>
@@ -1806,12 +1774,15 @@ function dictarSerie(reps, kg, ejercicioForzado, serieNumero) {
   }
 }
 
+// Devuelve true si la frase se entendió y se hizo algo con ella (aunque sea
+// mostrar un aviso de "falta X"), o false si no se reconoció nada — en ese
+// caso el que llama decide si esperar el resto de la frase o avisar.
 function procesarComandoVoz(transcriptOriginal) {
   const t = transcriptOriginal.toLowerCase().trim();
-  if (!t) return;
+  if (!t) return false;
 
   if (/\bdescans/.test(t)) {
-    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return true; }
     showTab("entrenar");
     const bloques = bloquesActuales();
     const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
@@ -1819,22 +1790,22 @@ function procesarComandoVoz(transcriptOriginal) {
       const idxIncompleta = primeraRondaIncompleta(bloque);
       if (idxIncompleta != null) {
         toast(`🎙️ Te falta completar la S${idxIncompleta + 1} en todos los ejercicios antes de descansar`);
-        return;
+        return true;
       }
     }
     const routine = getRoutine(entrenoActual.routineId);
     const dia = getDay(routine, entrenoActual.dayId);
     startTimer(descansoBloque(dia, bloqueActivoKey));
     toast("🎙️ Descanso iniciado");
-    return;
+    return true;
   }
   if (/\bsiguiente\b/.test(t)) {
-    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
-    showTab("entrenar"); moverBloqueActivo(1); return;
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return true; }
+    showTab("entrenar"); moverBloqueActivo(1); return true;
   }
   if (/\banterior\b/.test(t)) {
-    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
-    showTab("entrenar"); moverBloqueActivo(-1); return;
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return true; }
+    showTab("entrenar"); moverBloqueActivo(-1); return true;
   }
 
   const destinos = ["entrenar", "rutina", "historial", "perfil", "datos"];
@@ -1842,7 +1813,7 @@ function procesarComandoVoz(transcriptOriginal) {
   if (destinoDicho && /\b(ir|ve|abr|mostrar|abre)\b/.test(t)) {
     showTab(destinoDicho);
     toast(`🎙️ Abriendo ${destinoDicho}`);
-    return;
+    return true;
   }
 
   // Resuelve primero el ejercicio (por "1.1", nombre u ordinal) ANTES de
@@ -1863,7 +1834,7 @@ function procesarComandoVoz(transcriptOriginal) {
       if (suBloque) bloqueActivoKey = suBloque.key;
     } else if (grupoInfo.explicito) {
       toast(`🎙️ No encontré el ejercicio ${grupoInfo.grupo}`);
-      return;
+      return true;
     }
   }
 
@@ -1871,7 +1842,7 @@ function procesarComandoVoz(transcriptOriginal) {
   const parRepsKg = extraerRepsKgDeVoz(textoLimpio);
 
   if (parRepsKg) {
-    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return; }
+    if (!entrenoActual) { toast("🎙️ Primero inicia una sesión en Entrenar"); return true; }
     showTab("entrenar");
 
     if (!ejercicioForzado) {
@@ -1881,72 +1852,67 @@ function procesarComandoVoz(transcriptOriginal) {
     }
 
     dictarSerie(parRepsKg.reps, parRepsKg.kg, ejercicioForzado, serieDicha);
-    return;
+    return true;
   }
-  toast(`🎙️ No entendí: "${transcriptOriginal}"`);
+  return false;
 }
 
 const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
 const micBtn = document.getElementById("micFab");
 document.getElementById("micHelpBtn").addEventListener("click", () => modalAyudaVoz());
-document.getElementById("vozPanelClose").addEventListener("click", () => {
-  document.getElementById("vozPanel").hidden = true;
-});
 let recognizer = null;
 let escuchando = false;
-let detenidoAPropósito = false; // true solo cuando el usuario tocó 🎙️ para apagarlo
+// Si dijiste el comando en dos partes (con pausa: "1.1" ... "S1 doce
+// veinte"), la primera no se entiende sola — se guarda aquí y se junta con
+// la próxima frase (dentro de la ventana de tiempo) en vez de descartarla.
+let fragmentoPendiente = "";
+let fragmentoPendienteTimeout = null;
 
 if (SpeechRecognitionCtor) {
   recognizer = new SpeechRecognitionCtor();
   recognizer.lang = "es-CL";
-  // Modo continuo: tocas 🎙️ UNA vez y queda "en línea" escuchando frase tras
-  // frase (se nota por el punteo rojo) — nada de tocar-hablar-esperar-tocar
-  // por cada comando. Se apaga tocando 🎙️ de nuevo.
-  recognizer.continuous = true;
+  recognizer.continuous = false;
   recognizer.interimResults = false;
   recognizer.maxAlternatives = 1;
 
   recognizer.addEventListener("start", () => { escuchando = true; micBtn.classList.add("listening"); });
-  recognizer.addEventListener("end", () => {
-    escuchando = false;
-    micBtn.classList.remove("listening");
-    // Chrome a veces corta el modo continuo solo (silencio largo, límite de
-    // tiempo). Si el usuario no lo apagó él mismo, se reanuda solo.
-    if (!detenidoAPropósito) {
-      try { recognizer.start(); } catch (err) { /* ya se está reiniciando */ }
-    }
-  });
-  recognizer.addEventListener("error", (e) => {
-    if (e.error === "no-speech" || e.error === "aborted") return; // normal en modo continuo, no es una falla real
+  recognizer.addEventListener("end", () => { escuchando = false; micBtn.classList.remove("listening"); });
+  recognizer.addEventListener("error", () => {
     escuchando = false;
     micBtn.classList.remove("listening");
     toast("🎙️ No se pudo escuchar (revisa el permiso de micrófono)");
   });
   recognizer.addEventListener("result", (e) => {
-    for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (!e.results[i].isFinal) continue;
-      const transcript = e.results[i][0].transcript;
-      const panel = document.getElementById("vozPanel");
-      const escuche = document.getElementById("vozEscuche");
-      const entendi = document.getElementById("vozEntendi");
-      escuche.textContent = `"${transcript}"`;
-      entendi.textContent = "…";
-      panel.hidden = false;
-      try {
-        procesarComandoVoz(transcript);
-      } catch (err) {
-        toast(`🎙️ No pude procesar "${transcript}" (${err.message})`);
-      }
+    const transcript = e.results[0][0].transcript;
+    const textoAProcesar = fragmentoPendiente ? `${fragmentoPendiente} ${transcript}` : transcript;
+    let entendido = false;
+    try {
+      entendido = procesarComandoVoz(textoAProcesar);
+    } catch (err) {
+      toast(`🎙️ No pude procesar "${textoAProcesar}"`);
+      entendido = true; // ya se avisó del error, no seguir acumulando esto
+    }
+    clearTimeout(fragmentoPendienteTimeout);
+    if (entendido) {
+      fragmentoPendiente = "";
+    } else if (fragmentoPendiente) {
+      // ya se había esperado una vez y aun junto no se entendió: se descarta
+      fragmentoPendiente = "";
+      toast(`🎙️ No entendí: "${textoAProcesar}"`);
+    } else {
+      // primera vez que no se entiende: puede ser la primera mitad de la
+      // frase — se espera unos segundos por el resto antes de avisar
+      fragmentoPendiente = transcript;
+      fragmentoPendienteTimeout = setTimeout(() => { fragmentoPendiente = ""; }, 6000);
     }
   });
 
   micBtn.addEventListener("click", async () => {
-    if (escuchando) { detenidoAPropósito = true; recognizer.stop(); return; }
+    if (escuchando) { recognizer.stop(); return; }
     if (!localStorage.getItem(LS_VOZ_AYUDA_VISTA)) {
       await modalAyudaVoz();
       localStorage.setItem(LS_VOZ_AYUDA_VISTA, "1");
     }
-    detenidoAPropósito = false;
     try { recognizer.start(); } catch (err) { /* ya estaba escuchando */ }
   });
 } else {
