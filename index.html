@@ -1106,6 +1106,16 @@ function primeraRondaIncompleta(bloque) {
 function bloqueSinEmpezar(bloque) {
   return bloque.ejercicios.every((e) => entrenoActual.log[e.id].every((s) => s.reps === "" && s.kg === ""));
 }
+// Todas las rondas del bloque están completas (todos los ejercicios, todas
+// las series) — se usa para saber si el próximo descanso es "el último" del
+// bloque y, al terminar, hay que pasar solo al siguiente.
+function bloqueCompleto(bloque) {
+  const maxRondas = Math.max(...bloque.ejercicios.map((e) => entrenoActual.log[e.id].length));
+  for (let i = 0; i < maxRondas; i++) {
+    if (!rondaCompleta(bloque, i)) return false;
+  }
+  return true;
+}
 
 function renderSesionActiva() {
   const cont = document.getElementById("entrenarSesion");
@@ -1229,7 +1239,7 @@ function renderSesionActiva() {
       }
       bloqueActivoKey = btn.dataset.timerBlock;
       resaltarBloqueActivo();
-      startTimer(descansoBloque(dia, btn.dataset.timerBlock));
+      startTimer(descansoBloque(dia, btn.dataset.timerBlock), bloqueCompleto(bloqueDelBoton) ? bloqueDelBoton.key : null);
     });
   });
   cont.querySelectorAll("[data-vaciar-block]").forEach((btn) => {
@@ -1533,11 +1543,13 @@ function renderTimer() {
   document.getElementById("timerToggle").textContent = timerRunning ? "⏸" : "▶";
   timerWidget.classList.toggle("ringing", timerRemaining <= 0);
 }
-function startTimer(seconds) {
+let bloqueKeyAlTerminarDescanso = null; // si no es null, al llegar a 00:00 se pasa a este bloque
+function startTimer(seconds, bloqueKeyParaAvanzar) {
   timerSeconds = seconds;
   timerRemaining = seconds;
   timerWidget.hidden = false;
   timerRunning = false;
+  bloqueKeyAlTerminarDescanso = bloqueKeyParaAvanzar || null;
   clearInterval(timerInterval);
   renderTimer();
   toggleTimer();
@@ -1556,6 +1568,11 @@ function toggleTimer() {
         beep();
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
         renderTimer();
+        if (bloqueKeyAlTerminarDescanso) {
+          const key = bloqueKeyAlTerminarDescanso;
+          bloqueKeyAlTerminarDescanso = null;
+          avanzarAlSiguienteBloqueTrasDescanso(key);
+        }
         return;
       }
       renderTimer();
@@ -1563,6 +1580,22 @@ function toggleTimer() {
     timerInterval = setInterval(tick, 1000);
   }
   renderTimer();
+}
+// Al completar el descanso que cerraba el último bloque terminado: se
+// colapsa ese bloque y se abre el que sigue solo, como pediste — "encadenar"
+// bloques sin tener que ir tocando el acordeón a mano cada vez.
+function avanzarAlSiguienteBloqueTrasDescanso(bloqueKeyTerminado) {
+  if (!entrenoActual) return;
+  const bloques = bloquesActuales();
+  const idx = bloques.findIndex((b) => b.key === bloqueKeyTerminado);
+  if (idx === -1) return;
+  if (idx < bloques.length - 1) {
+    const siguiente = bloques[idx + 1];
+    activarBloqueEntreno(siguiente.key, { scroll: true });
+    toast(`✅ Bloque completado — pasando a ${siguiente.numero != null ? "Bloque " + siguiente.numero : "el siguiente ejercicio"}`);
+  } else {
+    toast("✅ ¡Completaste el último bloque de este día!");
+  }
 }
 function beep() {
   try {
@@ -1911,7 +1944,7 @@ function procesarComandoVoz(transcriptOriginal) {
     }
     const routine = getRoutine(entrenoActual.routineId);
     const dia = getDay(routine, entrenoActual.dayId);
-    startTimer(descansoBloque(dia, bloqueActivoKey));
+    startTimer(descansoBloque(dia, bloqueActivoKey), bloque && bloqueCompleto(bloque) ? bloque.key : null);
     toast("🎙️ Descanso iniciado");
     return true;
   }
