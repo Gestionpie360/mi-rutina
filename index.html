@@ -262,9 +262,11 @@ textarea { resize: vertical; min-height: 60px; }
 .exercise-badge { font-size: .72rem; color: var(--accent); font-weight: 700; }
 .exercise-hint { font-size: .78rem; color: var(--text-dim); margin: 4px 0 6px; }
 .exercise-volumen { font-size: .78rem; color: var(--ok); font-weight: 700; margin-top: 4px; }
-.block-vol-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+.block-vol-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
 .block-vol-row .exercise-volumen { margin-top: 0; }
 .block-vol-row .icon-btn { font-size: .74rem; white-space: nowrap; }
+.block-vol-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.block-vol-actions .icon-btn { border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; }
 
 .session-summary {
   display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px;
@@ -1190,7 +1192,11 @@ function renderSesionActiva() {
         </div>
         <div class="block-vol-row">
           <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
-          <button class="icon-btn" data-vaciar-block="${b.key}" title="Vaciar los datos de este bloque">🗑️ Vaciar</button>
+          <div class="block-vol-actions">
+            <button class="icon-btn" data-add-serie-block="${b.key}" title="Agregar una serie a este bloque">➕ Serie</button>
+            <button class="icon-btn" data-del-serie-block="${b.key}" title="Quitar la última serie de este bloque">➖ Serie</button>
+            <button class="icon-btn" data-vaciar-block="${b.key}" title="Vaciar los datos de este bloque">🗑️ Vaciar</button>
+          </div>
         </div>
       </div>
     </div>`;
@@ -1254,6 +1260,39 @@ function renderSesionActiva() {
         renderSesionActiva();
         toast("🗑️ Bloque vaciado");
       }
+    });
+  });
+  cont.querySelectorAll("[data-add-serie-block]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const bloque = bloques.find((b) => b.key === btn.dataset.addSerieBlock);
+      if (!bloque) return;
+      // Se agrega a la rutina guardada (para que la próxima vez ya venga
+      // así) y a la sesión en curso al mismo tiempo, para que no queden
+      // desincronizadas.
+      bloque.ejercicios.forEach((ex) => {
+        ex.series.push({ reps: "", kg: "" });
+        entrenoActual.log[ex.id].push({ reps: "", kg: "" });
+      });
+      persistRoutines();
+      renderSesionActiva();
+      toast("➕ Serie agregada al bloque");
+    });
+  });
+  cont.querySelectorAll("[data-del-serie-block]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const bloque = bloques.find((b) => b.key === btn.dataset.delSerieBlock);
+      if (!bloque) return;
+      const minSeries = Math.min(...bloque.ejercicios.map((ex) => ex.series.length));
+      if (minSeries <= 1) { toast("⚠️ El bloque debe tener al menos una serie"); return; }
+      const ok = await modalConfirm("Quitar serie", `¿Quitar la última serie (S${minSeries}) de este bloque? Se pierden los datos que tenga cargados.`);
+      if (!ok) return;
+      bloque.ejercicios.forEach((ex) => {
+        if (ex.series.length > 1) ex.series.pop();
+        if (entrenoActual.log[ex.id].length > 1) entrenoActual.log[ex.id].pop();
+      });
+      persistRoutines();
+      renderSesionActiva();
+      toast("➖ Serie quitada del bloque");
     });
   });
   cont.querySelectorAll("[data-clear-serie-key]").forEach((btn) => {
