@@ -1033,9 +1033,9 @@ function val(id) { return document.getElementById(id).value; }
 
 /* ---------------------------------------------------------------
    NUTRICIÓN
-   Metas calóricas/macros (fórmula Mifflin-St Jeor + nivel de actividad,
-   igual criterio que usan apps como Fitia) + registro editable de comidas
-   del día, con una mini base de alimentos precargada + alimentos propios.
+   Metas calóricas/macros (fórmula Mifflin-St Jeor + nivel de actividad)
+   + registro editable de comidas del día, con una mini base de alimentos
+   precargada + alimentos propios.
 --------------------------------------------------------------- */
 function modalAlimentoNuevo() {
   return modalBase("Alimento nuevo", `
@@ -1140,8 +1140,10 @@ function renderNutricion() {
   c.innerHTML = `
     <div class="card">
       <h2>🎯 Tus metas nutricionales</h2>
-      <p class="exercise-hint">Se calculan con tu peso, altura, edad y nivel de actividad — igual criterio
-      que usa Fitia. Son parámetros editables: ajústalos cuando cambie tu peso o tu objetivo.</p>
+      <p class="exercise-hint">Calcula cuántas calorías y cuántos gramos de proteína, carbohidratos y grasas
+      necesita tu cuerpo por día, a partir de tu peso, altura, edad, nivel de actividad y objetivo. Son
+      parámetros editables: ajústalos cuando cambie tu peso o tu objetivo, y toca de nuevo "Calcular y
+      guardar" para que se actualicen tus metas.</p>
       <div class="field-row">
         <div><label>Peso actual (kg)</label><input id="nu_peso" type="number" step="0.1" min="0" value="${esc(nutricion.pesoKg)}"></div>
         <div><label>Altura (cm)</label><input id="nu_altura" type="number" step="1" min="0" value="${esc(nutricion.alturaCm)}"></div>
@@ -1178,6 +1180,9 @@ function renderNutricion() {
         <h2>🍽️ Comidas del día</h2>
         <input id="nu_fecha" type="date" value="${esc(nutricionFecha)}" style="width:auto;margin:0">
       </div>
+      <p class="exercise-hint">Registra lo que comes cada día, comida por comida. La app suma las calorías
+      y macros de cada alimento automáticamente y las compara con tu meta de arriba, para que sepas cuánto
+      te falta o si ya te pasaste.</p>
       <div class="session-summary">
         <div>Calorías: <b>${Math.round(consumido.kcal)} / ${datosCompletos ? Math.round(r.metaKcal) : "–"} kcal</b></div>
         <div>Proteína: <b>${Math.round(consumido.prot)} / ${datosCompletos ? Math.round(r.proteinaG) : "–"} g</b></div>
@@ -1197,6 +1202,9 @@ function renderNutricion() {
           <option value="30" ${nutricionPeriodo === 30 ? "selected" : ""}>Últimos 30 días</option>
         </select>
       </div>
+      <p class="exercise-hint">Mira varios días juntos en vez de solo hoy, para ver tu tendencia real. El
+      promedio se calcula solo sobre los días que registraste comidas — así no se diluye con días vacíos
+      en los que no cargaste nada.</p>
       <div class="nutri-macros" style="margin-top:10px">
         <div class="nutri-macro-chip"><b>${registrados.length}/${nutricionPeriodo}</b>Días registrados</div>
         <div class="nutri-macro-chip"><b>${Math.round(avgKcalPeriodo).toLocaleString("es-CL")} kcal</b>Promedio${pctKcalPeriodo != null ? ` (${pctKcalPeriodo}% meta)` : ""}</div>
