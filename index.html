@@ -718,6 +718,86 @@ function totalesComidas(comidas) {
     return acc;
   }, { kcal: 0, prot: 0, carb: 0, grasa: 0 });
 }
+function fechaISOMenosDias(fechaISO, n) {
+  const [y, m, d] = fechaISO.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() - n);
+  const pad = (x) => String(x).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+}
+function rangoUltimosDias(n) {
+  const hoy = hoyISO();
+  const out = [];
+  for (let i = n - 1; i >= 0; i--) out.push(fechaISOMenosDias(hoy, i));
+  return out;
+}
+function promedio(arr, key) {
+  return arr.length ? arr.reduce((a, d) => a + d[key], 0) / arr.length : 0;
+}
+function buildChartNutricion(datos, metaKcal) {
+  const w = Math.max(320, datos.length * 40);
+  const h = 160;
+  const padL = 40, padB = 22, padT = 10;
+  const maxVal = Math.max(1, metaKcal || 0, ...datos.map((d) => d.kcal));
+  const barW = (w - padL - 10) / datos.length;
+  const bars = datos.map((d, i) => {
+    const x = padL + i * barW + barW * 0.15;
+    const bw = barW * 0.7;
+    const bh = (d.kcal / maxVal) * (h - padB - padT);
+    const y = h - padB - bh;
+    const color = !d.registrado ? "var(--border)" : (metaKcal && d.kcal > metaKcal * 1.1 ? "var(--warn)" : "var(--accent)");
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}"><title>${fmtFecha(d.fecha)}: ${Math.round(d.kcal)} kcal</title></rect>`;
+  }).join("");
+  const gridLines = [0, 0.5, 1].map((f) => {
+    const y = padT + f * (h - padB - padT);
+    const val = Math.round(maxVal * (1 - f));
+    return `<line x1="${padL}" y1="${y}" x2="${w - 5}" y2="${y}" stroke="var(--border)" stroke-width="1"/>
+      <text x="2" y="${y + 4}" font-size="9" fill="var(--text-dim)">${val}</text>`;
+  }).join("");
+  let metaLine = "";
+  if (metaKcal) {
+    const metaY = h - padB - (metaKcal / maxVal) * (h - padB - padT);
+    metaLine = `<line x1="${padL}" y1="${metaY.toFixed(1)}" x2="${w - 5}" y2="${metaY.toFixed(1)}" stroke="var(--ok)" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${w - 5}" y="${(metaY - 4).toFixed(1)}" font-size="9" fill="var(--ok)" text-anchor="end">meta</text>`;
+  }
+  const labels = datos.map((d, i) => {
+    const x = padL + i * barW + barW / 2;
+    return `<text x="${x.toFixed(1)}" y="${h - 6}" font-size="8" fill="var(--text-dim)" text-anchor="middle">${fmtFecha(d.fecha).slice(0, 5)}</text>`;
+  }).join("");
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${gridLines}${bars}${metaLine}${labels}</svg>`;
+}
+function generarResumenNutricion(registrados, metas, nutricionObj, periodoDias) {
+  if (!metas) return "Completa tus metas nutricionales arriba (peso, altura y edad) para ver el resumen del período.";
+  if (!registrados.length) return `No registraste comidas en los últimos ${periodoDias} días — cuando cargues algunas, aquí verás cómo te fue comparado con tu meta.`;
+
+  const avgKcal = promedio(registrados, "kcal");
+  const avgProt = promedio(registrados, "prot");
+  const pctKcal = metas.metaKcal ? Math.round((avgKcal / metas.metaKcal) * 100) : null;
+  const pctProt = metas.proteinaG ? Math.round((avgProt / metas.proteinaG) * 100) : null;
+
+  const frases = [];
+  frases.push(`Registraste comidas en ${registrados.length} de ${periodoDias} días. En esos días promediaste ${Math.round(avgKcal).toLocaleString("es-CL")} kcal (${pctKcal}% de tu meta de ${Math.round(metas.metaKcal).toLocaleString("es-CL")} kcal) y ${Math.round(avgProt)} g de proteína (${pctProt}% de tu meta de ${Math.round(metas.proteinaG)} g).`);
+
+  const obj = nutricionObj.objetivo;
+  if (obj === "ganar") {
+    if (pctKcal < 90) frases.push("Como tu objetivo es ganar músculo, conviene subir un poco las calorías — te quedaste bajo la meta la mayoría de los días registrados.");
+    else if (pctKcal > 115) frases.push("Estás comiendo harto más que tu meta — revisa si ese superávit es el que buscas, para no subir de grasa más de la cuenta.");
+    else frases.push("Estás cerca de tu meta calórica para ganar músculo, vas bien encaminado.");
+  } else if (obj === "bajar") {
+    if (pctKcal > 110) frases.push("Quedaste sobre tu meta calórica, lo que dificulta el déficit que buscas para bajar grasa.");
+    else if (pctKcal < 85) frases.push("Estás bastante por debajo de tu meta — un déficit muy grande sostenido puede hacerte perder también masa muscular.");
+    else frases.push("Estás cumpliendo bien el déficit calórico para tu objetivo.");
+  } else {
+    if (Math.abs(pctKcal - 100) <= 10) frases.push("Estás manteniendo tu ingesta cerca de tu meta, bien ahí.");
+    else if (pctKcal > 110) frases.push("Estás comiendo por sobre tu meta de mantención.");
+    else frases.push("Estás comiendo por debajo de tu meta de mantención.");
+  }
+
+  if (pctProt < 80) frases.push(`Tu proteína quedó baja (${pctProt}% de tu meta) — conviene priorizarla, por ejemplo con una porción extra de carne, huevo, lácteos o proteína en polvo.`);
+  else frases.push("Tu proteína estuvo bien encaminada.");
+
+  return frases.join(" ");
+}
 
 /* ---------------------------------------------------------------
    Estado
@@ -733,6 +813,7 @@ let nutricion = loadJSON(LS.nutricion, {
 let alimentosCustom = loadJSON(LS.alimentosCustom, []);
 let comidasDias = loadJSON(LS.comidasDias, {});
 let nutricionFecha = hoyISO();
+let nutricionPeriodo = 7; // días del reporte — solo preferencia de vista, no se persiste
 let routines = loadJSON(LS.routines, null);
 if (!routines || !routines.length) {
   routines = [rutinaOriginalPorDefecto()];
@@ -991,6 +1072,20 @@ function renderNutricion() {
   const consumido = totalesComidas(comidas);
   const opciones = alimentosDisponibles();
 
+  const diasPeriodo = rangoUltimosDias(nutricionPeriodo);
+  const datosPeriodo = diasPeriodo.map((f) => {
+    const cms = comidasDias[f] || [];
+    const tot = totalesComidas(cms);
+    const registrado = cms.some((cm) => cm.items.length > 0);
+    return { fecha: f, ...tot, registrado };
+  });
+  const registrados = datosPeriodo.filter((d) => d.registrado);
+  const avgKcalPeriodo = promedio(registrados, "kcal");
+  const avgProtPeriodo = promedio(registrados, "prot");
+  const pctKcalPeriodo = datosCompletos && r.metaKcal ? Math.round((avgKcalPeriodo / r.metaKcal) * 100) : null;
+  const pctProtPeriodo = datosCompletos && r.proteinaG ? Math.round((avgProtPeriodo / r.proteinaG) * 100) : null;
+  const resumenTexto = generarResumenNutricion(registrados, datosCompletos ? r : null, nutricion, nutricionPeriodo);
+
   const resultadosHtml = !datosCompletos ? `
     <p class="exercise-hint">Completa peso, altura y edad arriba para ver tus metas calculadas.</p>
   ` : `
@@ -1092,6 +1187,24 @@ function renderNutricion() {
       ${comidas.map(comidaHtml).join("")}
       <button class="btn ghost block" id="nu_add_comida">+ Comida</button>
     </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h2>📊 Reporte</h2>
+        <select id="nu_periodo" style="width:auto;margin:0">
+          <option value="7" ${nutricionPeriodo === 7 ? "selected" : ""}>Últimos 7 días</option>
+          <option value="14" ${nutricionPeriodo === 14 ? "selected" : ""}>Últimos 14 días</option>
+          <option value="30" ${nutricionPeriodo === 30 ? "selected" : ""}>Últimos 30 días</option>
+        </select>
+      </div>
+      <div class="nutri-macros" style="margin-top:10px">
+        <div class="nutri-macro-chip"><b>${registrados.length}/${nutricionPeriodo}</b>Días registrados</div>
+        <div class="nutri-macro-chip"><b>${Math.round(avgKcalPeriodo).toLocaleString("es-CL")} kcal</b>Promedio${pctKcalPeriodo != null ? ` (${pctKcalPeriodo}% meta)` : ""}</div>
+        <div class="nutri-macro-chip prote"><b>${Math.round(avgProtPeriodo)} g</b>Proteína prom.${pctProtPeriodo != null ? ` (${pctProtPeriodo}% meta)` : ""}</div>
+      </div>
+      <div class="chart-wrap">${buildChartNutricion(datosPeriodo, datosCompletos ? r.metaKcal : 0)}</div>
+      <p style="margin-top:10px">${esc(resumenTexto)}</p>
+    </div>
   `;
 
   document.getElementById("nu_guardar").addEventListener("click", () => {
@@ -1106,6 +1219,10 @@ function renderNutricion() {
   });
   document.getElementById("nu_fecha").addEventListener("change", (e) => {
     nutricionFecha = e.target.value || hoyISO();
+    renderNutricion();
+  });
+  document.getElementById("nu_periodo").addEventListener("change", (e) => {
+    nutricionPeriodo = parseInt(e.target.value, 10);
     renderNutricion();
   });
   document.getElementById("nu_add_comida").addEventListener("click", async () => {
