@@ -366,6 +366,34 @@ textarea { resize: vertical; min-height: 60px; }
   border-radius: 10px; padding: 10px 12px; font-size: .82rem; margin-bottom: 12px;
 }
 
+/* Nutrición */
+.nutri-resultado { margin-top: 4px; }
+.nutri-kcal-meta { text-align: center; padding: 14px 0 10px; }
+.nutri-kcal-num { font-size: 2.2rem; font-weight: 800; color: var(--accent); line-height: 1; }
+.nutri-kcal-label { font-size: .8rem; color: var(--text-dim); margin-top: 2px; }
+.nutri-macros { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.nutri-macro-chip {
+  flex: 1; min-width: 90px; text-align: center;
+  border: 1px solid var(--border); border-radius: 12px; padding: 8px 6px;
+  border-top: 3px solid var(--border);
+}
+.nutri-macro-chip b { display: block; font-size: 1.05rem; }
+.nutri-macro-chip span { display: block; font-size: .72rem; color: var(--text-dim); }
+.nutri-macro-chip.prote { border-top-color: var(--ok); }
+.nutri-macro-chip.carb { border-top-color: var(--accent); }
+.nutri-macro-chip.grasa { border-top-color: var(--warn); }
+.nutri-comida { margin-bottom: 10px; }
+.nutri-comida-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--bg); }
+.nutri-comida-head h2 { margin: 0; font-size: .95rem; }
+.nutri-comida-body { padding: 10px 14px 14px; }
+.nutri-item {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; background: var(--bg-elev);
+}
+.nutri-item-add { display: flex; gap: 8px; align-items: end; flex-wrap: wrap; }
+.nutri-item-add > div:first-child { flex: 2; min-width: 140px; }
+.nutri-item-add > div:last-child { flex: 1; min-width: 80px; }
+
 /* Modales */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 100;
@@ -402,6 +430,7 @@ textarea { resize: vertical; min-height: 60px; }
       <button class="tab-btn" data-tab="rutina">Rutina</button>
       <button class="tab-btn" data-tab="historial">Historial</button>
       <button class="tab-btn" data-tab="perfil">Perfil</button>
+      <button class="tab-btn" data-tab="nutricion">Nutrición</button>
       <button class="tab-btn" data-tab="datos">Datos</button>
     </nav>
   </div>
@@ -428,6 +457,11 @@ textarea { resize: vertical; min-height: 60px; }
   <!-- PERFIL -->
   <section class="view" id="view-perfil" hidden>
     <div id="perfilContent" class="card"></div>
+  </section>
+
+  <!-- NUTRICIÓN -->
+  <section class="view" id="view-nutricion" hidden>
+    <div id="nutricionContent"></div>
   </section>
 
   <!-- DATOS -->
@@ -463,6 +497,7 @@ textarea { resize: vertical; min-height: 60px; }
   <button class="bn-btn" data-tab="rutina"><span>📋</span>Rutina</button>
   <button class="bn-btn" data-tab="historial"><span>📈</span>Historial</button>
   <button class="bn-btn" data-tab="perfil"><span>👤</span>Perfil</button>
+  <button class="bn-btn" data-tab="nutricion"><span>🍎</span>Nutrición</button>
   <button class="bn-btn" data-tab="datos"><span>💾</span>Datos</button>
 </nav>
 
@@ -482,6 +517,9 @@ const LS = {
   routines: "rutina_routines_v1",
   sessions: "rutina_sessions_v1",
   activeRoutine: "rutina_active_routine_v1",
+  nutricion: "rutina_nutricion_v1",
+  alimentosCustom: "rutina_nutricion_alimentos_v1",
+  comidasDias: "rutina_nutricion_dias_v1",
 };
 const LS_VOZ_AYUDA_VISTA = "rutina_voz_ayuda_vista_v1";
 
@@ -604,12 +642,97 @@ function linkEjercicio(e) {
 }
 
 /* ---------------------------------------------------------------
+   Nutrición: catálogos
+--------------------------------------------------------------- */
+const NIVELES_ACTIVIDAD = [
+  { id: "sedentario", label: "Sedentario (poco o nada de ejercicio)", factor: 1.2 },
+  { id: "ligero", label: "Ligero (entrenas 1-3 días/semana)", factor: 1.375 },
+  { id: "moderado", label: "Moderado (entrenas 3-5 días/semana)", factor: 1.55 },
+  { id: "intenso", label: "Intenso (entrenas 6-7 días/semana)", factor: 1.725 },
+  { id: "muyintenso", label: "Muy intenso (entrenas + trabajo físico exigente)", factor: 1.9 },
+];
+const OBJETIVOS_NUTRICION = [
+  { id: "bajar", label: "Bajar grasa" },
+  { id: "mantener", label: "Mantener" },
+  { id: "ganar", label: "Ganar músculo" },
+];
+const COMIDAS_DEFECTO = ["Desayuno", "Almuerzo", "Once", "Cena"];
+// Macros por 100g — valores de referencia de tablas nutricionales estándar.
+const ALIMENTOS_BASE = [
+  { id: "pollo_pechuga", nombre: "Pechuga de pollo (cocida)", kcal100: 165, prot100: 31, carb100: 0, grasa100: 3.6 },
+  { id: "carne_vacuno", nombre: "Carne de vacuno magra (cocida)", kcal100: 217, prot100: 26, carb100: 0, grasa100: 12 },
+  { id: "huevo", nombre: "Huevo entero", kcal100: 155, prot100: 13, carb100: 1.1, grasa100: 11 },
+  { id: "atun", nombre: "Atún al agua", kcal100: 116, prot100: 26, carb100: 0, grasa100: 1 },
+  { id: "salmon", nombre: "Salmón (cocido)", kcal100: 208, prot100: 20, carb100: 0, grasa100: 13 },
+  { id: "yogur_griego", nombre: "Yogur griego natural", kcal100: 97, prot100: 9, carb100: 3.6, grasa100: 5 },
+  { id: "leche_descremada", nombre: "Leche descremada", kcal100: 35, prot100: 3.4, carb100: 5, grasa100: 0.1 },
+  { id: "queso_fresco", nombre: "Queso fresco", kcal100: 264, prot100: 18, carb100: 3, grasa100: 21 },
+  { id: "lentejas", nombre: "Lentejas cocidas", kcal100: 116, prot100: 9, carb100: 20, grasa100: 0.4 },
+  { id: "arroz_blanco", nombre: "Arroz blanco cocido", kcal100: 130, prot100: 2.7, carb100: 28, grasa100: 0.3 },
+  { id: "arroz_integral", nombre: "Arroz integral cocido", kcal100: 111, prot100: 2.6, carb100: 23, grasa100: 0.9 },
+  { id: "avena", nombre: "Avena cruda", kcal100: 389, prot100: 17, carb100: 66, grasa100: 7 },
+  { id: "pan", nombre: "Pan (marraqueta/hallulla)", kcal100: 270, prot100: 9, carb100: 53, grasa100: 2 },
+  { id: "papa", nombre: "Papa cocida", kcal100: 87, prot100: 1.9, carb100: 20, grasa100: 0.1 },
+  { id: "quinoa", nombre: "Quinoa cocida", kcal100: 120, prot100: 4.4, carb100: 21, grasa100: 1.9 },
+  { id: "platano", nombre: "Plátano", kcal100: 89, prot100: 1.1, carb100: 23, grasa100: 0.3 },
+  { id: "manzana", nombre: "Manzana", kcal100: 52, prot100: 0.3, carb100: 14, grasa100: 0.2 },
+  { id: "palta", nombre: "Palta", kcal100: 160, prot100: 2, carb100: 8.5, grasa100: 15 },
+  { id: "brocoli", nombre: "Brócoli cocido", kcal100: 35, prot100: 2.4, carb100: 7, grasa100: 0.4 },
+  { id: "ensalada_verde", nombre: "Ensalada de hojas verdes", kcal100: 20, prot100: 1.5, carb100: 3.5, grasa100: 0.2 },
+  { id: "aceite_oliva", nombre: "Aceite de oliva", kcal100: 884, prot100: 0, carb100: 0, grasa100: 100 },
+  { id: "almendras", nombre: "Almendras", kcal100: 579, prot100: 21, carb100: 22, grasa100: 50 },
+  { id: "mani", nombre: "Maní / mantequilla de maní", kcal100: 588, prot100: 25, carb100: 20, grasa100: 50 },
+  { id: "proteina_whey", nombre: "Proteína whey (polvo)", kcal100: 380, prot100: 75, carb100: 8, grasa100: 6 },
+];
+
+function calcularMetasNutricion(n) {
+  const peso = parseFloat(n.pesoKg) || 0;
+  const altura = parseFloat(n.alturaCm) || 0;
+  const edad = parseFloat(n.edad) || 0;
+  const factorAct = (NIVELES_ACTIVIDAD.find((x) => x.id === n.nivelActividad) || NIVELES_ACTIVIDAD[2]).factor;
+  const tmb = n.sexo === "M" ? 10 * peso + 6.25 * altura - 5 * edad + 5 : 10 * peso + 6.25 * altura - 5 * edad - 161;
+  const get = tmb * factorAct;
+  const ajuste = parseFloat(n.ajusteCalorico) || 0;
+  const metaKcal = Math.max(0, get * (1 + ajuste / 100));
+  const proteinaG = peso * (parseFloat(n.gProteinaPorKg) || 0);
+  const proteinaKcal = proteinaG * 4;
+  const pctGrasa = parseFloat(n.pctGrasa) || 0;
+  const grasaKcal = metaKcal * (pctGrasa / 100);
+  const grasaG = grasaKcal / 9;
+  const carbosKcal = Math.max(0, metaKcal - proteinaKcal - grasaKcal);
+  const carbosG = carbosKcal / 4;
+  return { tmb, get, metaKcal, proteinaG, proteinaKcal, grasaG, grasaKcal, carbosG, carbosKcal };
+}
+function alimentosDisponibles() { return ALIMENTOS_BASE.concat(alimentosCustom); }
+function getAlimentoPorId(id) { return alimentosDisponibles().find((a) => a.id === id); }
+function getComidasDelDia(fecha) {
+  if (!comidasDias[fecha]) {
+    comidasDias[fecha] = COMIDAS_DEFECTO.map((nombre) => ({ nombre, items: [] }));
+    persistComidasDias();
+  }
+  return comidasDias[fecha];
+}
+function totalesComidas(comidas) {
+  return comidas.reduce((acc, cm) => {
+    cm.items.forEach((it) => { acc.kcal += it.kcal; acc.prot += it.prot; acc.carb += it.carb; acc.grasa += it.grasa; });
+    return acc;
+  }, { kcal: 0, prot: 0, carb: 0, grasa: 0 });
+}
+
+/* ---------------------------------------------------------------
    Estado
 --------------------------------------------------------------- */
 let profile = loadJSON(LS.profile, {
   nombre: "", fechaInicio: "", edad: "", experiencia: "",
   lesiones: "", patologias: "", objetivos: "", antecedentes: "",
 });
+let nutricion = loadJSON(LS.nutricion, {
+  pesoKg: "", alturaCm: "", edad: "", sexo: "F", nivelActividad: "moderado",
+  objetivo: "mantener", ajusteCalorico: 0, gProteinaPorKg: 2, pctGrasa: 25,
+});
+let alimentosCustom = loadJSON(LS.alimentosCustom, []);
+let comidasDias = loadJSON(LS.comidasDias, {});
+let nutricionFecha = hoyISO();
 let routines = loadJSON(LS.routines, null);
 if (!routines || !routines.length) {
   routines = [rutinaOriginalPorDefecto()];
@@ -627,6 +750,9 @@ function persistRoutines() { saveJSON(LS.routines, routines); }
 function persistProfile() { saveJSON(LS.profile, profile); }
 function persistSessions() { saveJSON(LS.sessions, sessions); }
 function persistActiveRoutine() { saveJSON(LS.activeRoutine, activeRoutineId); }
+function persistNutricion() { saveJSON(LS.nutricion, nutricion); }
+function persistAlimentosCustom() { saveJSON(LS.alimentosCustom, alimentosCustom); }
+function persistComidasDias() { saveJSON(LS.comidasDias, comidasDias); }
 
 function getRoutine(id) { return routines.find((r) => r.id === id); }
 function getDay(routine, dayId) { return routine.dias.find((d) => d.id === dayId); }
@@ -746,7 +872,7 @@ function modalAyudaVoz() {
       <tr><td>"hollow doce veinte"</td><td>Nombra el ejercicio dentro del bloque abierto en vez del número.</td></tr>
       <tr><td>"descanso"</td><td>Inicia el cronómetro con la duración del bloque abierto.</td></tr>
       <tr><td>"siguiente" / "anterior"</td><td>Cambia el bloque abierto.</td></tr>
-      <tr><td>"ir a rutina / historial / perfil / datos"</td><td>Cambia de pestaña.</td></tr>
+      <tr><td>"ir a rutina / historial / perfil / nutrición / datos"</td><td>Cambia de pestaña.</td></tr>
     </table>
     <p><b>¿Te equivocaste?</b> Vuelve a decir el mismo ejercicio y serie con los números correctos
     (ej. "1.1 S1 catorce veintidós") — reemplaza el valor anterior, no lo duplica.</p>
@@ -763,7 +889,7 @@ function volumenEjercicio(seriesLog) {
 /* ---------------------------------------------------------------
    Navegación por pestañas
 --------------------------------------------------------------- */
-const TABS = ["entrenar", "rutina", "historial", "perfil", "datos"];
+const TABS = ["entrenar", "rutina", "historial", "perfil", "nutricion", "datos"];
 function showTab(tab) {
   TABS.forEach((t) => {
     document.getElementById("view-" + t).hidden = t !== tab;
@@ -779,6 +905,7 @@ function showTab(tab) {
   if (tab === "rutina") renderRutina();
   if (tab === "historial") renderHistorial();
   if (tab === "perfil") renderPerfil();
+  if (tab === "nutricion") renderNutricion();
   if (tab === "datos") renderDatos();
 }
 document.getElementById("tabs").addEventListener("click", (e) => {
@@ -822,6 +949,222 @@ function renderPerfil() {
   });
 }
 function val(id) { return document.getElementById(id).value; }
+
+/* ---------------------------------------------------------------
+   NUTRICIÓN
+   Metas calóricas/macros (fórmula Mifflin-St Jeor + nivel de actividad,
+   igual criterio que usan apps como Fitia) + registro editable de comidas
+   del día, con una mini base de alimentos precargada + alimentos propios.
+--------------------------------------------------------------- */
+function modalAlimentoNuevo() {
+  return modalBase("Alimento nuevo", `
+    <label>Nombre</label><input id="al_nombre" placeholder="Ej: Pechuga de pavo">
+    <div class="field-row">
+      <div><label>Calorías /100g</label><input id="al_kcal" type="number" min="0" step="1"></div>
+      <div><label>Proteína /100g (g)</label><input id="al_prot" type="number" min="0" step="0.1"></div>
+    </div>
+    <div class="field-row">
+      <div><label>Carbohidratos /100g (g)</label><input id="al_carb" type="number" min="0" step="0.1"></div>
+      <div><label>Grasas /100g (g)</label><input id="al_grasa" type="number" min="0" step="0.1"></div>
+    </div>
+  `, [
+    { label: "Cancelar", ghost: true, value: null },
+    { label: "Agregar", getValue: (o) => {
+        const nombre = o.querySelector("#al_nombre").value.trim();
+        if (!nombre) return null;
+        return {
+          id: "custom_" + Math.random().toString(36).slice(2),
+          nombre,
+          kcal100: parseFloat(o.querySelector("#al_kcal").value) || 0,
+          prot100: parseFloat(o.querySelector("#al_prot").value) || 0,
+          carb100: parseFloat(o.querySelector("#al_carb").value) || 0,
+          grasa100: parseFloat(o.querySelector("#al_grasa").value) || 0,
+        };
+      } },
+  ]);
+}
+function renderNutricion() {
+  const c = document.getElementById("nutricionContent");
+  const r = calcularMetasNutricion(nutricion);
+  const datosCompletos = (parseFloat(nutricion.pesoKg) > 0 && parseFloat(nutricion.alturaCm) > 0 && parseFloat(nutricion.edad) > 0);
+  const comidas = getComidasDelDia(nutricionFecha);
+  const consumido = totalesComidas(comidas);
+  const opciones = alimentosDisponibles();
+
+  const resultadosHtml = !datosCompletos ? `
+    <p class="exercise-hint">Completa peso, altura y edad arriba para ver tus metas calculadas.</p>
+  ` : `
+    <div class="nutri-resultado">
+      <div class="nutri-kcal-meta">
+        <div class="nutri-kcal-num">${Math.round(r.metaKcal).toLocaleString("es-CL")}</div>
+        <div class="nutri-kcal-label">kcal / día meta</div>
+      </div>
+      <div class="nutri-macros">
+        <div class="nutri-macro-chip prote"><b>${Math.round(r.proteinaG)} g</b>Proteína<span>${Math.round(r.proteinaKcal)} kcal</span></div>
+        <div class="nutri-macro-chip carb"><b>${Math.round(r.carbosG)} g</b>Carbohidratos<span>${Math.round(r.carbosKcal)} kcal</span></div>
+        <div class="nutri-macro-chip grasa"><b>${Math.round(r.grasaG)} g</b>Grasas<span>${Math.round(r.grasaKcal)} kcal</span></div>
+      </div>
+      <div class="exercise-hint">TMB (metabolismo basal): ${Math.round(r.tmb).toLocaleString("es-CL")} kcal · Gasto calórico total (TDEE): ${Math.round(r.get).toLocaleString("es-CL")} kcal</div>
+    </div>
+  `;
+
+  function comidaHtml(cm, idx) {
+    const itemsHtml = cm.items.length ? cm.items.map((it, i) => `
+      <div class="nutri-item">
+        <div>
+          <div class="exercise-name">${esc(it.nombre)} — ${it.gramos} g</div>
+          <div class="exercise-meta">${Math.round(it.kcal)} kcal · P ${Math.round(it.prot)} g · C ${Math.round(it.carb)} g · G ${Math.round(it.grasa)} g</div>
+        </div>
+        <button class="icon-btn" data-del-item="${idx}:${i}" title="Quitar alimento">🗑️</button>
+      </div>
+    `).join("") : `<p class="exercise-hint">Sin alimentos agregados.</p>`;
+    return `
+      <div class="day-block nutri-comida">
+        <div class="nutri-comida-head">
+          <h2>${esc(cm.nombre)}</h2>
+          <button class="icon-btn" data-del-comida="${idx}" title="Eliminar esta comida">🗑️</button>
+        </div>
+        <div class="nutri-comida-body">
+          ${itemsHtml}
+          <div class="nutri-item-add">
+            <div><label>Alimento</label>
+              <select data-alimento-select="${idx}">
+                <option value="">Elegir…</option>
+                ${opciones.map((a) => `<option value="${a.id}">${esc(a.nombre)}</option>`).join("")}
+                <option value="__nuevo">+ Alimento nuevo…</option>
+              </select>
+            </div>
+            <div><label>Gramos</label><input type="number" min="1" step="1" data-gramos-input="${idx}" placeholder="100"></div>
+          </div>
+          <button class="btn small" data-add-item="${idx}">+ Agregar alimento</button>
+        </div>
+      </div>
+    `;
+  }
+
+  c.innerHTML = `
+    <div class="card">
+      <h2>🎯 Tus metas nutricionales</h2>
+      <p class="exercise-hint">Se calculan con tu peso, altura, edad y nivel de actividad — igual criterio
+      que usa Fitia. Son parámetros editables: ajústalos cuando cambie tu peso o tu objetivo.</p>
+      <div class="field-row">
+        <div><label>Peso actual (kg)</label><input id="nu_peso" type="number" step="0.1" min="0" value="${esc(nutricion.pesoKg)}"></div>
+        <div><label>Altura (cm)</label><input id="nu_altura" type="number" step="1" min="0" value="${esc(nutricion.alturaCm)}"></div>
+      </div>
+      <div class="field-row">
+        <div><label>Edad</label><input id="nu_edad" type="number" min="0" value="${esc(nutricion.edad)}"></div>
+        <div><label>Sexo</label>
+          <select id="nu_sexo">
+            <option value="F" ${nutricion.sexo === "F" ? "selected" : ""}>Mujer</option>
+            <option value="M" ${nutricion.sexo === "M" ? "selected" : ""}>Hombre</option>
+          </select>
+        </div>
+      </div>
+      <label>Nivel de actividad (según cuánto entrenas)</label>
+      <select id="nu_actividad">${NIVELES_ACTIVIDAD.map((a) => `<option value="${a.id}" ${nutricion.nivelActividad === a.id ? "selected" : ""}>${esc(a.label)}</option>`).join("")}</select>
+      <label>Objetivo</label>
+      <select id="nu_objetivo">${OBJETIVOS_NUTRICION.map((o) => `<option value="${o.id}" ${nutricion.objetivo === o.id ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select>
+      <div class="field-row">
+        <div>
+          <label>Ajuste calórico (%)</label>
+          <input id="nu_ajuste" type="number" step="1" value="${esc(nutricion.ajusteCalorico)}">
+        </div>
+        <div><label>Proteína (g por kg de peso)</label><input id="nu_prote" type="number" step="0.1" min="0" value="${esc(nutricion.gProteinaPorKg)}"></div>
+      </div>
+      <p class="exercise-hint" style="margin-top:-8px">Ajuste sugerido: -20% para bajar grasa · 0% para mantener · +10 a +15% para ganar músculo.</p>
+      <label>Grasas (% de las calorías totales)</label>
+      <input id="nu_grasa" type="number" step="1" min="0" max="60" value="${esc(nutricion.pctGrasa)}">
+      <button class="btn block" id="nu_guardar">Calcular y guardar</button>
+      ${resultadosHtml}
+    </div>
+
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <h2>🍽️ Comidas del día</h2>
+        <input id="nu_fecha" type="date" value="${esc(nutricionFecha)}" style="width:auto;margin:0">
+      </div>
+      <div class="session-summary">
+        <div>Calorías: <b>${Math.round(consumido.kcal)} / ${datosCompletos ? Math.round(r.metaKcal) : "–"} kcal</b></div>
+        <div>Proteína: <b>${Math.round(consumido.prot)} / ${datosCompletos ? Math.round(r.proteinaG) : "–"} g</b></div>
+        <div>Carbohidratos: <b>${Math.round(consumido.carb)} / ${datosCompletos ? Math.round(r.carbosG) : "–"} g</b></div>
+        <div>Grasas: <b>${Math.round(consumido.grasa)} / ${datosCompletos ? Math.round(r.grasaG) : "–"} g</b></div>
+      </div>
+      ${comidas.map(comidaHtml).join("")}
+      <button class="btn ghost block" id="nu_add_comida">+ Comida</button>
+    </div>
+  `;
+
+  document.getElementById("nu_guardar").addEventListener("click", () => {
+    nutricion = {
+      pesoKg: val("nu_peso"), alturaCm: val("nu_altura"), edad: val("nu_edad"), sexo: val("nu_sexo"),
+      nivelActividad: val("nu_actividad"), objetivo: val("nu_objetivo"), ajusteCalorico: val("nu_ajuste"),
+      gProteinaPorKg: val("nu_prote"), pctGrasa: val("nu_grasa"),
+    };
+    persistNutricion();
+    toast("Metas nutricionales guardadas");
+    renderNutricion();
+  });
+  document.getElementById("nu_fecha").addEventListener("change", (e) => {
+    nutricionFecha = e.target.value || hoyISO();
+    renderNutricion();
+  });
+  document.getElementById("nu_add_comida").addEventListener("click", async () => {
+    const nombre = await modalPrompt("Nueva comida", "", "Ej: Colación");
+    if (!nombre) return;
+    getComidasDelDia(nutricionFecha).push({ nombre, items: [] });
+    persistComidasDias();
+    renderNutricion();
+  });
+  c.querySelectorAll("[data-del-comida]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = parseInt(btn.dataset.delComida, 10);
+      const cm = getComidasDelDia(nutricionFecha)[idx];
+      const ok = await modalConfirm("Eliminar comida", `¿Eliminar "${cm.nombre}" y todos sus alimentos?`);
+      if (!ok) return;
+      getComidasDelDia(nutricionFecha).splice(idx, 1);
+      persistComidasDias();
+      renderNutricion();
+    });
+  });
+  c.querySelectorAll("[data-del-item]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const [idx, i] = btn.dataset.delItem.split(":").map((n) => parseInt(n, 10));
+      getComidasDelDia(nutricionFecha)[idx].items.splice(i, 1);
+      persistComidasDias();
+      renderNutricion();
+    });
+  });
+  c.querySelectorAll("[data-add-item]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const idx = parseInt(btn.dataset.addItem, 10);
+      const select = c.querySelector(`[data-alimento-select="${idx}"]`);
+      const gramosInput = c.querySelector(`[data-gramos-input="${idx}"]`);
+      const gramos = parseFloat(gramosInput.value) || 0;
+      if (!select.value) { toast("⚠️ Elige un alimento"); return; }
+      if (gramos <= 0) { toast("⚠️ Indica los gramos"); return; }
+      let alimento;
+      if (select.value === "__nuevo") {
+        alimento = await modalAlimentoNuevo();
+        if (!alimento) return;
+        alimentosCustom.push(alimento);
+        persistAlimentosCustom();
+      } else {
+        alimento = getAlimentoPorId(select.value);
+      }
+      if (!alimento) return;
+      getComidasDelDia(nutricionFecha)[idx].items.push({
+        nombre: alimento.nombre, gramos,
+        kcal: alimento.kcal100 * gramos / 100,
+        prot: alimento.prot100 * gramos / 100,
+        carb: alimento.carb100 * gramos / 100,
+        grasa: alimento.grasa100 * gramos / 100,
+      });
+      persistComidasDias();
+      renderNutricion();
+      toast("➕ Alimento agregado");
+    });
+  });
+}
 
 /* ---------------------------------------------------------------
    RUTINA (ver/editar)
@@ -1509,19 +1852,22 @@ function renderDatos() {
   document.getElementById("dt_importar").addEventListener("click", () => document.getElementById("dt_file").click());
   document.getElementById("dt_file").addEventListener("change", importarDatos);
   document.getElementById("dt_reset").addEventListener("click", async () => {
-    const ok = await modalConfirm("Borrar todo", "Esto borrará tu perfil, rutinas e historial de este dispositivo. ¿Continuar?");
+    const ok = await modalConfirm("Borrar todo", "Esto borrará tu perfil, rutinas, historial y nutrición de este dispositivo. ¿Continuar?");
     if (ok) {
       localStorage.removeItem(LS.profile);
       localStorage.removeItem(LS.routines);
       localStorage.removeItem(LS.sessions);
       localStorage.removeItem(LS.activeRoutine);
+      localStorage.removeItem(LS.nutricion);
+      localStorage.removeItem(LS.alimentosCustom);
+      localStorage.removeItem(LS.comidasDias);
       location.reload();
     }
   });
 }
 
 function exportarDatos() {
-  const data = { version: 1, exportadoEl: new Date().toISOString(), profile, routines, sessions };
+  const data = { version: 1, exportadoEl: new Date().toISOString(), profile, routines, sessions, nutricion, alimentosCustom, comidasDias };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1547,8 +1893,12 @@ function importarDatos(e) {
       if (data.profile) profile = data.profile;
       if (Array.isArray(data.routines) && data.routines.length) routines = data.routines;
       if (Array.isArray(data.sessions)) sessions = data.sessions;
+      if (data.nutricion) nutricion = data.nutricion;
+      if (Array.isArray(data.alimentosCustom)) alimentosCustom = data.alimentosCustom;
+      if (data.comidasDias) comidasDias = data.comidasDias;
       activeRoutineId = routines[0].id;
       persistProfile(); persistRoutines(); persistSessions(); persistActiveRoutine();
+      persistNutricion(); persistAlimentosCustom(); persistComidasDias();
       toast("Datos importados ✅");
       showTab("entrenar");
     } catch (err) {
@@ -1996,8 +2346,8 @@ function procesarComandoVoz(transcriptOriginal) {
     showTab("entrenar"); moverBloqueActivo(-1); return true;
   }
 
-  const destinos = ["entrenar", "rutina", "historial", "perfil", "datos"];
-  const destinoDicho = destinos.find((d) => t.includes(d));
+  const destinos = ["entrenar", "rutina", "historial", "perfil", "nutricion", "datos"];
+  const destinoDicho = destinos.find((d) => sinTildes(t).includes(d));
   if (destinoDicho && /\b(ir|ve|abr|mostrar|abre)\b/.test(t)) {
     showTab(destinoDicho);
     toast(`🎙️ Abriendo ${destinoDicho}`);
