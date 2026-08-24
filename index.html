@@ -1177,6 +1177,8 @@ function renderNutricion() {
       </div>
       <label>Grasas (% de las calorías totales)</label>
       <input id="nu_grasa" type="number" step="1" min="0" max="60" value="${esc(nutricion.pctGrasa)}">
+      <p class="exercise-hint" style="margin-top:-8px">Qué porcentaje de tu meta calórica diaria viene de grasas — el resto se reparte en
+      carbohidratos. Se recomienda entre 20% y 35%; muy poca grasa afecta hormonas, mucha deja pocas calorías para carbohidratos.</p>
       <button class="btn block" id="nu_guardar">Calcular y guardar</button>
       ${resultadosHtml}
     </div>
