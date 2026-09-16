@@ -406,6 +406,12 @@ textarea { resize: vertical; min-height: 60px; }
 .nutri-menu-dia { margin-top: 14px; }
 .nutri-menu-fila { display: flex; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: .84rem; }
 .nutri-menu-fila b { min-width: 78px; flex-shrink: 0; color: var(--text-dim); font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; padding-top: 1px; }
+.nutri-plato-idea {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid var(--accent); border-radius: 10px;
+  padding: 8px 10px; font-size: .82rem; margin-bottom: 10px;
+}
+.nutri-plato-idea b { color: var(--accent); }
 
 /* Modales */
 .modal-overlay {
@@ -790,6 +796,13 @@ const MINUTA_SUGERIDA = {
   ],
 };
 
+// Qué campo de MINUTA_SUGERIDA trae el nombre real de plato para cada plantilla de comida.
+const PLANTILLA_CAMPO_MINUTA = { desayuno: "d", almuerzo: "a", once_cena: "o", colacion_tarde: "c2" };
+function platosReferencia(campo) {
+  const out = [];
+  for (let semana = 1; semana <= 4; semana++) MINUTA_SUGERIDA[semana].forEach((dia) => out.push(dia[campo]));
+  return out;
+}
 function fmtPorcion(n) {
   n = Number(n) || 0;
   return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(".", ",");
@@ -801,7 +814,7 @@ function getComidasDelDia(fecha) {
   if (!comidasDias[fecha]) {
     comidasDias[fecha] = PLANTILLAS_COMIDA.map((p) => ({
       id: "m_" + Math.random().toString(36).slice(2), plantillaId: p.id, nombre: p.nombre,
-      porciones: [], proteinaPolvo: false, productoColacion: null,
+      porciones: [], proteinaPolvo: false, productoColacion: null, platoSugerido: null,
     }));
     persistComidasDias();
   }
@@ -842,7 +855,13 @@ function generarComboAleatorio(plantilla) {
     if (Math.random() < 0.5) proteinaPolvo = true;
     else productoColacion = PRODUCTOS_COLACION[Math.floor(Math.random() * PRODUCTOS_COLACION.length)];
   }
-  return { porciones, proteinaPolvo, productoColacion };
+  let platoSugerido = null;
+  const campoMinuta = PLANTILLA_CAMPO_MINUTA[plantilla.id];
+  if (campoMinuta) {
+    const platos = platosReferencia(campoMinuta);
+    platoSugerido = platos[Math.floor(Math.random() * platos.length)];
+  }
+  return { porciones, proteinaPolvo, productoColacion, platoSugerido };
 }
 function fechaISOMenosDias(fechaISO, n) {
   const [y, m, d] = fechaISO.split("-").map(Number);
@@ -1235,6 +1254,7 @@ function renderNutricion() {
         </div>
         <div class="nutri-comida-body">
           <div class="exercise-meta" style="margin-bottom:8px">${esc(formulaTexto(plantilla))}</div>
+          ${cm.platoSugerido ? `<div class="nutri-plato-idea">💡 Idea real de tu plan: <b>${esc(cm.platoSugerido)}</b></div>` : ""}
           ${filas}
           ${proteinaHtml}
         </div>
@@ -1360,7 +1380,7 @@ function renderNutricion() {
     const plantilla = PLANTILLAS_COMIDA.find((p) => p.id === plantillaId);
     getComidasDelDia(nutricionFecha).push({
       id: "m_" + Math.random().toString(36).slice(2), plantillaId, nombre: plantilla.nombre,
-      porciones: [], proteinaPolvo: false, productoColacion: null,
+      porciones: [], proteinaPolvo: false, productoColacion: null, platoSugerido: null,
     });
     persistComidasDias();
     renderNutricion();
@@ -1382,7 +1402,7 @@ function renderNutricion() {
       const ok = await modalConfirm("Vaciar comida", "¿Borrar todos los alimentos cargados en esta comida?");
       if (!ok) return;
       const cm = getComidasDelDia(nutricionFecha)[idx];
-      cm.porciones = []; cm.proteinaPolvo = false; cm.productoColacion = null;
+      cm.porciones = []; cm.proteinaPolvo = false; cm.productoColacion = null; cm.platoSugerido = null;
       persistComidasDias();
       renderNutricion();
     });
@@ -1400,6 +1420,7 @@ function renderNutricion() {
       cm.porciones = combo.porciones;
       cm.proteinaPolvo = combo.proteinaPolvo;
       cm.productoColacion = combo.productoColacion;
+      cm.platoSugerido = combo.platoSugerido;
       persistComidasDias();
       renderNutricion();
       toast("🎲 Combo sugerido");
