@@ -184,6 +184,9 @@ textarea { resize: vertical; min-height: 60px; }
 .exercise-name { flex: 1; font-weight: 600; font-size: .92rem; }
 .exercise-name-input { flex: 1; margin: 0; padding: 6px 8px; font-size: .9rem; }
 .exercise-meta { font-size: .78rem; color: var(--text-dim); margin-top: 4px; }
+.iso-toggle { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--text-dim); margin-top: 6px; cursor: pointer; }
+.iso-toggle input { width: auto; margin: 0; }
+.iso-badge { font-size: .72rem; font-weight: 600; color: var(--accent); margin-left: 6px; white-space: nowrap; }
 .exercise-actions { display: flex; gap: 4px; }
 .icon-btn {
   border: none; background: transparent; color: var(--text-dim);
@@ -712,6 +715,7 @@ h2 { letter-spacing: -.01em; }
 
 <div id="toast" class="toast" hidden></div>
 <datalist id="dlReps"></datalist>
+<datalist id="dlSeg"></datalist>
 <datalist id="dlKg"></datalist>
 
 <script>
@@ -1553,6 +1557,7 @@ function modalAyudaVoz() {
       <tr><td>"1.1 S1 doce veinte"</td><td>Llena la Serie 1 del ejercicio 1.1 con 12 reps y 20 kg. Funciona con cualquier ejercicio y serie (ej. "1.2 S3 diez quince").</td></tr>
       <tr><td>"doce veinte"</td><td>Sin decir ejercicio ni serie: llena la próxima serie vacía del bloque abierto.</td></tr>
       <tr><td>"hollow doce veinte"</td><td>Nombra el ejercicio dentro del bloque abierto en vez del número.</td></tr>
+      <tr><td>"hollow treinta"</td><td>Ejercicio isométrico (⏱️): el número son segundos. Si dices otro número (o "cinco kilos") es el kg extra. Sin nombrar el ejercicio, un solo número va al isométrico del bloque abierto.</td></tr>
       <tr><td>"descanso"</td><td>Inicia el cronómetro con la duración del bloque abierto.</td></tr>
       <tr><td>"siguiente" / "anterior"</td><td>Cambia el bloque abierto.</td></tr>
       <tr><td>"ir a rutina / historial / perfil / nutrición / datos"</td><td>Cambia de pestaña.</td></tr>
@@ -1561,7 +1566,28 @@ function modalAyudaVoz() {
     (ej. "1.1 S1 catorce veintidós") — reemplaza el valor anterior, no lo duplica.</p>
   `, [{ label: "Entendido", value: true }]);
 }
-function volumenEjercicio(seriesLog) {
+// Un ejercicio isométrico (plancha, hollow…) se mide en SEGUNDOS: la serie
+// guarda los segundos en "reps" y el kg es lastre extra, opcional. Si el
+// ejercicio trae el flag `isometrico` manda ese; si no, se deduce del
+// nombre/indicaciones (así las rutinas ya guardadas funcionan sin migrar).
+const RE_ISOMETRICO = /isom[eé]tric|plancha|hollow|\bplank\b/i;
+function esIsometrico(e) {
+  if (typeof e.isometrico === "boolean") return e.isometrico;
+  return RE_ISOMETRICO.test(`${e.nombre || ""} ${e.indicaciones || ""}`);
+}
+// Segundos totales sostenidos en un ejercicio isométrico.
+function segundosEjercicio(seriesLog) {
+  return seriesLog.reduce((acc, s) => acc + (parseFloat(s.reps) || 0), 0);
+}
+// Una serie está completa con reps y kg; en un isométrico basta con los
+// segundos (el kg extra es opcional).
+function serieCompleta(e, s) {
+  return !!s && s.reps !== "" && (esIsometrico(e) || s.kg !== "");
+}
+// Volumen = Σ reps×kg. En un isométrico no se calcula (segundos×kg no
+// significa nada): su "carga" se informa aparte como tiempo.
+function volumenEjercicio(seriesLog, ejercicio) {
+  if (ejercicio && esIsometrico(ejercicio)) return 0;
   return seriesLog.reduce((acc, s) => {
     const r = parseFloat(s.reps) || 0;
     const k = parseFloat(s.kg) || 0;
@@ -2580,6 +2606,7 @@ function exerciseRowEdit(dia, e) {
       <a class="icon-btn" href="${linkEjercicio(e)}" target="_blank" rel="noopener" title="Ver cómo se hace">▶️</a>
     </div>
     <div class="exercise-meta">${e.series.length} serie(s)</div>
+    <label class="iso-toggle"><input type="checkbox" data-field="isometrico" data-day="${dia.id}" data-ej="${e.id}" ${esIsometrico(e) ? "checked" : ""}> ⏱️ Isométrico (se registra en segundos, kg extra opcional)</label>
   </div>`;
 }
 
@@ -2694,7 +2721,7 @@ function rutinaChangeHandler(e) {
   } else if (t.dataset.field) {
     const d = getDay(routine, t.dataset.day);
     const ex = d.ejercicios.find((x) => x.id === t.dataset.ej);
-    ex[t.dataset.field] = t.value;
+    ex[t.dataset.field] = t.type === "checkbox" ? t.checked : t.value;
     persistRoutines();
   } else if (t.dataset.block) {
     const d = getDay(routine, t.dataset.day);
@@ -2758,23 +2785,34 @@ function bloquesActuales() {
   return agruparPorBloque(dia.ejercicios);
 }
 // ¿Todos los ejercicios del bloque tienen reps y kg cargados para esta ronda?
+// (en un isométrico basta con los segundos — ver serieCompleta)
 function rondaCompleta(bloque, idx) {
-  return bloque.ejercicios.every((e) => {
-    const s = entrenoActual.log[e.id][idx];
-    return s && s.reps !== "" && s.kg !== "";
-  });
+  return bloque.ejercicios.every((e) => serieCompleta(e, entrenoActual.log[e.id][idx]));
 }
 // Primera ronda que quedó a medias (algún ejercicio con datos y otro sin
 // ellos) — se usa para no dejar descansar hasta terminarla.
 function primeraRondaIncompleta(bloque) {
   const maxRondas = Math.max(...bloque.ejercicios.map((e) => entrenoActual.log[e.id].length));
   for (let i = 0; i < maxRondas; i++) {
-    const estados = bloque.ejercicios.map((e) => entrenoActual.log[e.id][i]).filter(Boolean);
-    const algunoLleno = estados.some((s) => s.reps !== "" || s.kg !== "");
-    const todosLlenos = estados.every((s) => s.reps !== "" && s.kg !== "");
+    const pares = bloque.ejercicios
+      .map((e) => ({ e, s: entrenoActual.log[e.id][i] }))
+      .filter((p) => p.s);
+    const algunoLleno = pares.some((p) => p.s.reps !== "" || p.s.kg !== "");
+    const todosLlenos = pares.every((p) => serieCompleta(p.e, p.s));
     if (algunoLleno && !todosLlenos) return i;
   }
   return null;
+}
+// Texto del volumen del bloque; si incluye isométricos suma también su
+// tiempo total en segundos.
+function textoVolumenBloque(b) {
+  const vol = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id], e), 0);
+  let t = `Volumen del bloque: ${vol.toLocaleString("es-CL")} kg`;
+  if (b.ejercicios.some(esIsometrico)) {
+    const seg = b.ejercicios.reduce((acc, e) => acc + (esIsometrico(e) ? segundosEjercicio(entrenoActual.log[e.id]) : 0), 0);
+    t += ` · Tiempo isométrico: ${seg.toLocaleString("es-CL")} s`;
+  }
+  return t;
 }
 // Ningún ejercicio del bloque tiene una sola reps/kg cargada todavía.
 function bloqueSinEmpezar(bloque) {
@@ -2799,7 +2837,7 @@ function renderSesionActiva() {
   if (bloqueActivoKey == null && bloques.length) bloqueActivoKey = bloques[0].key;
 
   let volTotal = 0;
-  dia.ejercicios.forEach((e) => { volTotal += volumenEjercicio(entrenoActual.log[e.id]); });
+  dia.ejercicios.forEach((e) => { volTotal += volumenEjercicio(entrenoActual.log[e.id], e); });
 
   let html = `<div class="card">
     <div class="session-summary">
@@ -2815,7 +2853,6 @@ function renderSesionActiva() {
 
   bloques.forEach((b) => {
     const maxRondas = Math.max(...b.ejercicios.map((e) => entrenoActual.log[e.id].length));
-    const volBloque = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
     const titulo = b.numero != null ? `Bloque ${b.numero}` : "Ejercicio";
     const resumen = b.ejercicios.map((e) => esc(e.nombre)).join(" + ");
     const abierto = b.key === bloqueActivoKey;
@@ -2832,7 +2869,7 @@ function renderSesionActiva() {
         <div class="block-exlist">
           ${b.ejercicios.map((e) => `
             <div class="block-exname">
-              <span>${esc(e.grupo)} ${esc(e.nombre)}</span>
+              <span>${esc(e.grupo)} ${esc(e.nombre)}${esIsometrico(e) ? `<span class="iso-badge">⏱️ en segundos</span>` : ""}</span>
               <a href="${linkEjercicio(e)}" target="_blank" rel="noopener" class="icon-btn" title="Ver cómo se hace">▶️</a>
             </div>
             ${e.indicaciones ? `<div class="exercise-hint">${esc(e.indicaciones)}</div>` : ""}
@@ -2843,7 +2880,7 @@ function renderSesionActiva() {
           <thead>
             <tr>
               <th></th>
-              ${b.ejercicios.map((e) => `<th colspan="2">${esc(e.grupo)}</th>`).join("")}
+              ${b.ejercicios.map((e) => `<th colspan="2">${esc(e.grupo)}${esIsometrico(e) ? " ⏱️" : ""}</th>`).join("")}
               <th></th>
             </tr>
           </thead>
@@ -2854,8 +2891,9 @@ function renderSesionActiva() {
                 ${b.ejercicios.map((e) => {
                   const s = entrenoActual.log[e.id][i];
                   if (!s) return `<td colspan="2">-</td>`;
-                  return `<td><input inputmode="numeric" placeholder="reps" list="dlReps" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
-                  <td><input inputmode="decimal" placeholder="kg" list="dlKg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
+                  const iso = esIsometrico(e);
+                  return `<td><input inputmode="numeric" placeholder="${iso ? "seg" : "reps"}" list="${iso ? "dlSeg" : "dlReps"}" data-ej="${e.id}" data-idx="${i}" data-field="reps" value="${esc(s.reps)}"></td>
+                  <td><input inputmode="decimal" placeholder="${iso ? "+kg" : "kg"}" list="dlKg" data-ej="${e.id}" data-idx="${i}" data-field="kg" value="${esc(s.kg)}"></td>`;
                 }).join("")}
                 <td><button class="icon-btn timer-row-btn" data-timer-block="${b.key}" data-timer-idx="${i}" title="Iniciar descanso del bloque">⏱️</button></td>
               </tr>`).join("")}
@@ -2863,7 +2901,7 @@ function renderSesionActiva() {
         </table>
         </div>
         <div class="block-vol-row">
-          <div class="exercise-volumen" id="blockvol-${b.key}">Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg</div>
+          <div class="exercise-volumen" id="blockvol-${b.key}">${textoVolumenBloque(b)}</div>
           <div class="block-vol-actions">
             <button class="icon-btn" data-add-serie-block="${b.key}" title="Agregar una serie a este bloque">➕ Serie</button>
             <button class="icon-btn" data-del-serie-block="${b.key}" title="Quitar la última serie de este bloque">➖ Serie</button>
@@ -2912,7 +2950,7 @@ function renderSesionActiva() {
         return;
       }
       if (bloqueDelBoton && !rondaCompleta(bloqueDelBoton, idx)) {
-        toast(`⏱️ Completa reps y kg de la S${idx + 1} en todos los ejercicios del bloque antes de descansar`);
+        toast(`⏱️ Completa la S${idx + 1} (reps y kg; segundos en los isométricos) en todos los ejercicios del bloque antes de descansar`);
         return;
       }
       bloqueActivoKey = btn.dataset.timerBlock;
@@ -3019,10 +3057,10 @@ function updateVolumenLive() {
   const bloques = agruparPorBloque(dia.ejercicios);
   let volTotal = 0;
   bloques.forEach((b) => {
-    const volBloque = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
+    const volBloque = b.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id], e), 0);
     volTotal += volBloque;
     const el = document.getElementById("blockvol-" + b.key);
-    if (el) el.textContent = `Volumen del bloque: ${volBloque.toLocaleString("es-CL")} kg`;
+    if (el) el.textContent = textoVolumenBloque(b);
   });
   const b = document.getElementById("en_vol_total");
   if (b) b.textContent = `${volTotal.toLocaleString("es-CL")} kg`;
@@ -3031,7 +3069,7 @@ function updateVolumenLive() {
 async function finalizarSesion() {
   const routine = getRoutine(entrenoActual.routineId);
   const dia = getDay(routine, entrenoActual.dayId);
-  const volPrevia = dia.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id]), 0);
+  const volPrevia = dia.ejercicios.reduce((acc, e) => acc + volumenEjercicio(entrenoActual.log[e.id], e), 0);
   const resultado = await modalFinalizarSesion(volPrevia);
   if (!resultado) return;
   const rpe = resultado.rpe === "" ? null : parseFloat(resultado.rpe);
@@ -3040,9 +3078,9 @@ async function finalizarSesion() {
   let volTotal = 0;
   const ejercicios = dia.ejercicios.map((e) => {
     const seriesLog = entrenoActual.log[e.id].filter((s) => s.reps !== "" || s.kg !== "");
-    const vol = volumenEjercicio(seriesLog);
+    const vol = volumenEjercicio(seriesLog, e);
     volTotal += vol;
-    return { ejercicioId: e.id, nombre: e.nombre, grupo: e.grupo, series: seriesLog, volumen: vol };
+    return { ejercicioId: e.id, nombre: e.nombre, grupo: e.grupo, isometrico: esIsometrico(e), series: seriesLog, volumen: vol };
   });
 
   const sesion = {
@@ -3096,8 +3134,10 @@ function renderHistorial() {
           ${s.ejercicios.filter((e) => e.series.length).map((e) => `
             <tr>
               <td style="text-align:left">${esc(e.grupo)} ${esc(e.nombre)}</td>
-              <td>${e.series.map((x) => `${x.reps || "-"}x${x.kg || "-"}`).join(", ")}</td>
-              <td>${e.volumen.toLocaleString("es-CL")}</td>
+              <td>${esIsometrico(e)
+                ? e.series.map((x) => `${x.reps || "-"} s${parseFloat(x.kg) > 0 ? ` +${x.kg} kg` : ""}`).join(", ")
+                : e.series.map((x) => `${x.reps || "-"}x${x.kg || "-"}`).join(", ")}</td>
+              <td>${esIsometrico(e) ? `${segundosEjercicio(e.series).toLocaleString("es-CL")} s` : e.volumen.toLocaleString("es-CL")}</td>
             </tr>`).join("")}
         </tbody>
       </table>
@@ -3407,19 +3447,25 @@ function sinTildes(s) {
 
 const UNIDAD_REPS = /^(rep|reps|repes|repeticion|repeticiones)$/;
 const UNIDAD_KG = /^(kilo|kilos|kg|kgs|peso|pesos)$/;
+const UNIDAD_SEG = /^(seg|segs|segundo|segundos)$/;
 
 // Extrae reps y kg de una frase, sin importar el orden en que se digan
 // ("doce veinte", "veinte kilos doce repeticiones", "doce por veinte"…).
 // Usa las palabras "reps/kilos" para saber cuál número es cuál; si no hay
 // pistas, asume que el primer número dicho son las reps y el segundo los kg.
-function extraerRepsKgDeVoz(texto) {
-  // Por si el reconocedor llega a transcribir "erre ocho"/"ka siete punto
-  // cinco" tal cual como "r8"/"k7.5" (pasa a veces con números pegados a
-  // una letra) — se revisa antes de la ruta normal, no la reemplaza.
-  const mRK = texto.match(/\br\s*(\d+(?:[.,]\d+)?)\b[\s\S]*?\bk\s*(\d+(?:[.,]\d+)?)\b/i);
-  if (mRK) return { reps: parseFloat(mRK[1].replace(",", ".")), kg: parseFloat(mRK[2].replace(",", ".")) };
-  const mKR = texto.match(/\bk\s*(\d+(?:[.,]\d+)?)\b[\s\S]*?\br\s*(\d+(?:[.,]\d+)?)\b/i);
-  if (mKR) return { reps: parseFloat(mKR[2].replace(",", ".")), kg: parseFloat(mKR[1].replace(",", ".")) };
+// Con `soloNumeros` devuelve la lista cruda de números hallados (cada uno
+// con su unidad: "reps" | "kg" | "seg" | null) en vez de resolver reps/kg —
+// lo usa extraerSegundosKgDeVoz para los ejercicios isométricos.
+function extraerRepsKgDeVoz(texto, soloNumeros) {
+  if (!soloNumeros) {
+    // Por si el reconocedor llega a transcribir "erre ocho"/"ka siete punto
+    // cinco" tal cual como "r8"/"k7.5" (pasa a veces con números pegados a
+    // una letra) — se revisa antes de la ruta normal, no la reemplaza.
+    const mRK = texto.match(/\br\s*(\d+(?:[.,]\d+)?)\b[\s\S]*?\bk\s*(\d+(?:[.,]\d+)?)\b/i);
+    if (mRK) return { reps: parseFloat(mRK[1].replace(",", ".")), kg: parseFloat(mRK[2].replace(",", ".")) };
+    const mKR = texto.match(/\bk\s*(\d+(?:[.,]\d+)?)\b[\s\S]*?\br\s*(\d+(?:[.,]\d+)?)\b/i);
+    if (mKR) return { reps: parseFloat(mKR[2].replace(",", ".")), kg: parseFloat(mKR[1].replace(",", ".")) };
+  }
 
   const limpio = normalizarNumerosCompuestos(texto);
   const tokens = limpio.split(/\s+/);
@@ -3480,14 +3526,17 @@ function extraerRepsKgDeVoz(texto) {
       if (esTokenNumero(tokens[j])) break;
       if (UNIDAD_REPS.test(tokens[j])) { h.unidad = "reps"; break; }
       if (UNIDAD_KG.test(tokens[j])) { h.unidad = "kg"; break; }
+      if (soloNumeros && UNIDAD_SEG.test(tokens[j])) { h.unidad = "seg"; break; }
     }
     if (h.unidad) return;
     for (let j = h.inicio - 1; j >= 0; j--) {
       if (esTokenNumero(tokens[j])) break;
       if (UNIDAD_REPS.test(tokens[j])) { h.unidad = "reps"; break; }
       if (UNIDAD_KG.test(tokens[j])) { h.unidad = "kg"; break; }
+      if (soloNumeros && UNIDAD_SEG.test(tokens[j])) { h.unidad = "seg"; break; }
     }
   });
+  if (soloNumeros) return hallados;
 
   const conReps = hallados.find((h) => h.unidad === "reps");
   const conKg = hallados.find((h) => h.unidad === "kg");
@@ -3502,6 +3551,18 @@ function extraerRepsKgDeVoz(texto) {
     if (partido) return partido;
   }
   return null;
+}
+// Ejercicio isométrico: el número dicho son SEGUNDOS ("hollow treinta") y,
+// si se dice un segundo número, es el kg extra ("plancha cuarenta cinco
+// cinco kilos"). Devuelve {reps: segundos, kg: número|null} o null.
+function extraerSegundosKgDeVoz(texto) {
+  const hallados = extraerRepsKgDeVoz(texto, true);
+  if (!hallados.length) return null;
+  const conKg = hallados.find((h) => h.unidad === "kg");
+  const seg = hallados.find((h) => h.unidad === "seg") || hallados.find((h) => h !== conKg);
+  if (!seg) return null;
+  const otro = conKg || hallados.find((h) => h !== seg);
+  return { reps: seg.valor, kg: otro ? otro.valor : null };
 }
 function dividirNumeroPegado(numStr) {
   for (let corte = 1; corte < numStr.length; corte++) {
@@ -3601,6 +3662,13 @@ function buscarEjercicioPorGrupoActual(grupoTexto) {
   return dia.ejercicios.find((e) => e.grupo === grupoTexto) || null;
 }
 
+// Texto del aviso al dictar: "12 reps × 20 kg" o, en un isométrico,
+// "30 s" / "45 s + 5 kg".
+function textoSerieVoz(ex, reps, kg) {
+  if (esIsometrico(ex)) return `${reps} s${kg ? ` + ${kg} kg` : ""}`;
+  return `${reps} reps × ${kg} kg`;
+}
+// kg puede venir null (isométrico sin lastre).
 function dictarSerie(reps, kg, ejercicioForzado, serieNumero) {
   const bloques = bloquesActuales();
   const bloque = bloques.find((b) => b.key === bloqueActivoKey) || bloques[0];
@@ -3616,9 +3684,9 @@ function dictarSerie(reps, kg, ejercicioForzado, serieNumero) {
       toast(`🎙️ "${ex.nombre}" no tiene una serie ${serieNumero}`);
       return;
     }
-    serieLog[idx] = { reps: String(reps), kg: String(kg) };
+    serieLog[idx] = { reps: String(reps), kg: kg == null ? "" : String(kg) };
     renderSesionActiva();
-    toast(`🎙️ ${ex.grupo} S${serieNumero}: ${reps} reps × ${kg} kg`);
+    toast(`🎙️ ${ex.grupo} S${serieNumero}: ${textoSerieVoz(ex, reps, kg)}`);
     return;
   }
 
@@ -3628,9 +3696,9 @@ function dictarSerie(reps, kg, ejercicioForzado, serieNumero) {
     for (let i = 0; i < serieLog.length; i++) {
       if (serieLog[i].reps === "" && serieLog[i].kg === "") {
         serieLog[i].reps = String(reps);
-        serieLog[i].kg = String(kg);
+        serieLog[i].kg = kg == null ? "" : String(kg);
         renderSesionActiva();
-        toast(`🎙️ ${ex.nombre}: ${reps} reps × ${kg} kg`);
+        toast(`🎙️ ${ex.nombre}: ${textoSerieVoz(ex, reps, kg)}`);
         return;
       }
     }
@@ -3711,6 +3779,32 @@ function procesarComandoVoz(transcriptOriginal) {
   }
 
   const { serie: serieDicha, resto: textoLimpio } = extraerSerieYRestante(textoParaSerie);
+
+  // Isométricos: si la frase apunta a un ejercicio isométrico (por número,
+  // por nombre o —con un solo número dicho— porque el bloque abierto tiene
+  // uno), ese número son SEGUNDOS y un segundo número es el kg extra.
+  if (entrenoActual) {
+    const bloquesIso = bloquesActuales();
+    const bloqueIso = bloquesIso.find((b) => b.key === bloqueActivoKey) || bloquesIso[0];
+    let ejIso = ejercicioForzado || (bloqueIso ? identificarEjercicioDeVoz(t, bloqueIso) : null);
+    if (!ejIso && bloqueIso) {
+      const isos = bloqueIso.ejercicios.filter(esIsometrico);
+      const nums = isos.length ? extraerRepsKgDeVoz(textoLimpio, true) : [];
+      if (nums.length === 1 && nums[0].unidad !== "reps" && nums[0].unidad !== "kg"
+          && (nums[0].unidad === "seg" || nums[0].valor <= 300)) {
+        ejIso = isos.find((e) => entrenoActual.log[e.id].some((s) => s.reps === "" && s.kg === "")) || isos[0];
+      }
+    }
+    if (ejIso && esIsometrico(ejIso)) {
+      const parSeg = extraerSegundosKgDeVoz(textoLimpio);
+      if (parSeg) {
+        showTab("entrenar");
+        dictarSerie(parSeg.reps, parSeg.kg, ejIso, serieDicha);
+        return true;
+      }
+    }
+  }
+
   const parRepsKg = extraerRepsKgDeVoz(textoLimpio);
 
   if (parRepsKg) {
@@ -3827,6 +3921,8 @@ if (SpeechRecognitionCtor) {
   for (let n = 1; n <= 30; n++) {
     dlReps.appendChild(new Option(n));
   }
+  const dlSeg = document.getElementById("dlSeg");
+  [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 75, 90, 120].forEach((n) => dlSeg.appendChild(new Option(n)));
   const dlKg = document.getElementById("dlKg");
   for (let n = 0; n <= 100; n += 0.5) {
     dlKg.appendChild(new Option(n % 1 === 0 ? String(n) : n.toFixed(1)));
