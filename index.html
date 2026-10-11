@@ -932,6 +932,29 @@ function catalogoMacros() {
   return MACRO_ALIMENTOS.map((a) => ({ nombre: a[0], porcion: a[1], g: a[2], k: a[3], c: a[4], p: a[5], l: a[6] }))
     .concat(alimentosMacroCustom);
 }
+// Primer alimento de cada sección → título del grupo en el desplegable del conteo.
+const SECCIONES_MACRO = {
+  "Avena (cruda)": "Cereales y derivados", "Atún en agua": "Carnes, pescados y legumbres",
+  "Acelga (cocida)": "Verduras", "Manzana": "Frutas", "Queso laminado": "Lácteos",
+  "Palta": "Alimentos ricos en lípidos", "Aceite (maravilla, canola u oliva)": "Aceites y otros",
+};
+function opcionesMacroHtml() {
+  let html = "", abierto = false;
+  MACRO_ALIMENTOS.forEach((a) => {
+    if (SECCIONES_MACRO[a[0]]) {
+      if (abierto) html += "</optgroup>";
+      html += `<optgroup label="${esc(SECCIONES_MACRO[a[0]])}">`;
+      abierto = true;
+    }
+    html += `<option value="${esc(a[0])}">${esc(a[0])} — ${esc(a[1])} (${a[2]} g)</option>`;
+  });
+  if (abierto) html += "</optgroup>";
+  if (alimentosMacroCustom.length) {
+    html += `<optgroup label="Mis alimentos">${alimentosMacroCustom.map((a) =>
+      `<option value="${esc(a.nombre)}">${esc(a.nombre)}${a.g ? " — " + a.g + " g" : ""}</option>`).join("")}</optgroup>`;
+  }
+  return html;
+}
 function buscarMacroAlimento(nombre) {
   const n = sinTildes(String(nombre).toLowerCase().trim());
   if (!n) return null;
@@ -948,6 +971,11 @@ function crearEntradaMacro(alim, gramos) {
 function totalesMacros(entradas) {
   return entradas.reduce((a, e) => ({ kcal: a.kcal + e.kcal, carb: a.carb + e.carb, prot: a.prot + e.prot, lip: a.lip + e.lip }),
     { kcal: 0, carb: 0, prot: 0, lip: 0 });
+}
+// Valores de 1 scoop de proteína en polvo (30 g de whey típico); editables en "Mis metas" según la etiqueta.
+const SCOOP_DEFECTO = { kcal: 120, carb: 3, prot: 24, lip: 1.5 };
+function scoopActual() {
+  return { ...SCOOP_DEFECTO, ...(nutricion.scoop || {}) };
 }
 function fmtMacro(n) {
   return (Math.round((Number(n) || 0) * 10) / 10).toLocaleString("es-CL");
@@ -1350,16 +1378,18 @@ function modalElegirPlantilla() {
     PLANTILLAS_COMIDA.map((p) => ({ label: p.nombre, value: p.id }))
       .concat([{ label: "Cancelar", ghost: true, value: null }]));
 }
-function modalAlimentoMacro(nombre, gramos) {
-  return modalBase("Alimento nuevo", `
-    <p>"${esc(nombre)}" no está en la lista. Ingresa sus valores (vienen en la etiqueta del envase o en una
-    tabla nutricional) y quedará guardado para la próxima vez.</p>
+function modalAlimentoMacro(gramosIniciales) {
+  return modalBase("Alimento que no está en la lista", `
+    <p>Ingresa su nombre, los gramos que comiste y sus valores (vienen en la etiqueta del envase o en una
+    tabla nutricional). Quedará guardado para la próxima vez.</p>
     <label>Nombre</label>
-    <input id="am_nombre" value="${esc(nombre)}">
+    <input id="am_nombre" placeholder="Ej: Barra de proteína">
+    <label>Gramos que comiste</label>
+    <input id="am_gramos" type="number" min="1" step="1" inputmode="decimal" value="${gramosIniciales > 0 ? esc(String(gramosIniciales)) : ""}">
     <label>Los valores que ingreso son…</label>
     <select id="am_base">
       <option value="100">por cada 100 g</option>
-      <option value="total">por los ${esc(fmtMacro(gramos))} g que comí</option>
+      <option value="total">por los gramos que comí</option>
     </select>
     <div class="field-row">
       <div><label>Calorías (kcal)</label><input id="am_k" type="number" min="0" step="0.1" inputmode="decimal"></div>
@@ -1373,10 +1403,11 @@ function modalAlimentoMacro(nombre, gramos) {
     { label: "Cancelar", ghost: true, value: null },
     { label: "Agregar", getValue: (o) => {
         const n = o.querySelector("#am_nombre").value.trim();
-        if (!n) return null;
-        const f = o.querySelector("#am_base").value === "total" ? 100 / gramos : 1;
+        const g = parseFloat(o.querySelector("#am_gramos").value) || 0;
+        if (!n || !(g > 0)) return { invalido: true };
+        const f = o.querySelector("#am_base").value === "total" ? 100 / g : 1;
         const num = (id) => (parseFloat(o.querySelector(id).value) || 0) * f;
-        return { nombre: n, porcion: "", g: gramos, k: num("#am_k"), c: num("#am_c"), p: num("#am_p"), l: num("#am_l") };
+        return { nombre: n, gramos: g, k: num("#am_k"), c: num("#am_c"), p: num("#am_p"), l: num("#am_l") };
       } },
   ]);
 }
@@ -1397,7 +1428,14 @@ function renderNutricion() {
   const resumenTexto = generarResumenPorciones(registrados, nutricion.metasPorciones, nutricionPeriodo);
 
   const entradasMacro = comidasMacros[nutricionFecha] || [];
-  const totMacro = totalesMacros(entradasMacro);
+  // Cada "Proteína en polvo" marcada en las comidas del día cuenta como 1 scoop dentro del conteo de macros.
+  const nScoops = comidas.filter((cm) => cm.proteinaPolvo).length;
+  const scoopV = scoopActual();
+  const totBase = totalesMacros(entradasMacro);
+  const totMacro = {
+    kcal: totBase.kcal + nScoops * scoopV.kcal, carb: totBase.carb + nScoops * scoopV.carb,
+    prot: totBase.prot + nScoops * scoopV.prot, lip: totBase.lip + nScoops * scoopV.lip,
+  };
   const metaMacro = {
     kcal: parseFloat(nutricion.calorias) || 0, carb: parseFloat(nutricion.carbohidratos) || 0,
     prot: parseFloat(nutricion.proteinas) || 0, lip: parseFloat(nutricion.lipidos) || 0,
@@ -1456,7 +1494,7 @@ function renderNutricion() {
       <div class="nutri-porcion-item" style="margin-top:8px">
         <label style="display:flex;align-items:center;gap:8px;margin:0;font-weight:600;color:var(--text)">
           <input type="checkbox" data-proteina-polvo="${idx}" ${cm.proteinaPolvo ? "checked" : ""} style="width:auto;margin:0">
-          💪 Proteína en polvo (1 scoop) — no resta de ningún grupo
+          💪 Proteína en polvo (1 scoop) — suma a tus proteínas del día (no usa porciones)
         </label>
       </div>
       <div class="nutri-item-add">
@@ -1515,32 +1553,50 @@ function renderNutricion() {
           </div>
         `).join("")}
       </div>
+      <label style="margin-top:12px">Mi scoop de proteína en polvo (valores de 1 scoop)</label>
+      <p class="exercise-hint" style="margin-top:-8px">Cópialos de la etiqueta de tu proteína. Se suman a tu conteo
+      cada vez que marcas "Proteína en polvo" en la colación (vienen con un scoop típico de 30 g de whey).</p>
+      <div class="nutri-macros">
+        ${[["kcal", "Calorías (kcal)"], ["carb", "Carbohidratos (g)"], ["prot", "Proteínas (g)"], ["lip", "Lípidos (g)"]].map(([k, t]) => `
+          <div class="nutri-macro-chip">
+            <label style="margin:0 0 4px">${t}</label>
+            <input type="number" min="0" step="0.1" data-scoop="${k}" value="${esc(scoopV[k])}" style="margin:0;text-align:center">
+          </div>
+        `).join("")}
+      </div>
       <button class="btn block" id="nu_guardar">Guardar mis metas</button>
     </div>
 
     <div class="card">
       <h2>🔢 Mi conteo del día (calorías y macros)</h2>
-      <p class="exercise-hint">Anota lo que vas comiendo con su gramaje: la app suma calorías, carbohidratos,
+      <p class="exercise-hint">Elige el alimento y se suma al instante: la app cuenta calorías, carbohidratos,
       proteínas y lípidos y los compara con tus metas de arriba, para que veas cuánto llevas y cuánto te falta.
-      Al elegir un alimento de la lista, el gramaje se completa con la porción de tu plan (puedes cambiarlo). Si
-      el alimento no está, escríbelo igual: te pido sus valores y queda guardado para la próxima.</p>
+      Usa la porción de tu plan; si comiste otra cantidad, escribe los gramos <b>antes</b> de elegirlo, o corrígelos
+      después con ✏️. Si el alimento no está en la lista, elige "+ Otro alimento" y te pido sus valores.</p>
       ${barraMacroHtml("Calorías", "kcal", totMacro.kcal, metaMacro.kcal, false)}
       ${barraMacroHtml("Carbohidratos", "g", totMacro.carb, metaMacro.carb, false)}
       ${barraMacroHtml("Proteínas", "g", totMacro.prot, metaMacro.prot, true)}
       ${barraMacroHtml("Lípidos", "g", totMacro.lip, metaMacro.lip, false)}
       <div class="nutri-item-add" style="margin-top:12px">
-        <div><label>Alimento</label>
-          <input id="nu_mac_nombre" list="dlMacroAlimentos" placeholder="Escribe o elige…" autocomplete="off" style="margin:0">
+        <div style="flex:1;min-width:110px"><label>Gramos (opcional)</label>
+          <input id="nu_mac_gramos" type="number" min="1" step="1" inputmode="decimal" placeholder="porción del plan" style="margin:0">
         </div>
-        <div><label>Gramos</label>
-          <input id="nu_mac_gramos" type="number" min="1" step="1" inputmode="decimal" placeholder="g" style="margin:0">
+        <div style="flex:2;min-width:180px"><label>Alimento (se suma al elegirlo)</label>
+          <select id="nu_mac_select" style="margin:0">
+            <option value="">➕ Elegir alimento…</option>
+            ${opcionesMacroHtml()}
+            <option value="__nuevo">+ Otro alimento (no está en la lista)…</option>
+          </select>
         </div>
       </div>
-      <datalist id="dlMacroAlimentos">
-        ${catalogoMacros().map((a) => `<option value="${esc(a.nombre)}" label="${esc((a.porcion ? a.porcion + " · " : "") + (a.g ? a.g + " g" : ""))}"></option>`).join("")}
-      </datalist>
-      <button class="btn block" id="nu_mac_add" style="margin-top:10px">+ Agregar al conteo</button>
       <div style="margin-top:12px">
+        ${nScoops ? `
+          <div class="nutri-item">
+            <div>
+              <div class="exercise-name">💪 Proteína en polvo — ${nScoops} scoop${nScoops > 1 ? "s" : ""}</div>
+              <div class="exercise-meta">${Math.round(nScoops * scoopV.kcal)} kcal · C ${fmtMacro(nScoops * scoopV.carb)} g · P ${fmtMacro(nScoops * scoopV.prot)} g · L ${fmtMacro(nScoops * scoopV.lip)} g<br>Viene de tu colación; para quitarlo, desmárcalo en "Comidas del día".</div>
+            </div>
+          </div>` : ""}
         ${entradasMacro.length ? entradasMacro.map((e) => `
           <div class="nutri-item">
             <div>
@@ -1551,7 +1607,7 @@ function renderNutricion() {
               <button class="icon-btn" data-edit-macro="${e.id}" title="Cambiar los gramos">✏️</button>
               <button class="icon-btn" data-del-macro="${e.id}" title="Quitar">🗑️</button>
             </span>
-          </div>`).join("") : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`}
+          </div>`).join("") : (nScoops ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
       </div>
       ${entradasMacro.length ? `<button class="btn ghost small" id="nu_mac_vaciar">🗑️ Vaciar el conteo de este día</button>` : ""}
     </div>
@@ -1618,9 +1674,11 @@ function renderNutricion() {
   document.getElementById("nu_guardar").addEventListener("click", () => {
     const metasPorciones = {};
     c.querySelectorAll("[data-meta-grupo]").forEach((inp) => { metasPorciones[inp.dataset.metaGrupo] = parseFloat(inp.value) || 0; });
+    const scoop = {};
+    c.querySelectorAll("[data-scoop]").forEach((inp) => { scoop[inp.dataset.scoop] = parseFloat(inp.value) || 0; });
     nutricion = {
       calorias: val("nu_calorias"), carbohidratos: val("nu_carbohidratos"),
-      proteinas: val("nu_proteinas"), lipidos: val("nu_lipidos"), metasPorciones,
+      proteinas: val("nu_proteinas"), lipidos: val("nu_lipidos"), metasPorciones, scoop,
     };
     persistNutricion();
     toast("Metas guardadas");
@@ -1640,25 +1698,34 @@ function renderNutricion() {
   });
 
   // --- Conteo de calorías y macros ---
-  const macNombre = document.getElementById("nu_mac_nombre");
+  // Al elegir el alimento se suma de inmediato: con los gramos escritos arriba, o con la porción del plan.
+  const macSelect = document.getElementById("nu_mac_select");
   const macGramos = document.getElementById("nu_mac_gramos");
-  let gramosEscritosAMano = false;
-  macGramos.addEventListener("input", () => { gramosEscritosAMano = true; });
-  macNombre.addEventListener("input", () => {
-    const a = buscarMacroAlimento(macNombre.value);
-    if (a && a.g && !gramosEscritosAMano) macGramos.value = a.g;
-  });
-  document.getElementById("nu_mac_add").addEventListener("click", async () => {
-    const nombre = macNombre.value.trim();
-    const gramos = parseFloat(macGramos.value) || 0;
-    if (!nombre) { toast("⚠️ Escribe o elige un alimento"); return; }
-    if (gramos <= 0) { toast("⚠️ Indica los gramos"); return; }
-    let alim = buscarMacroAlimento(nombre);
-    if (!alim) {
-      alim = await modalAlimentoMacro(nombre, gramos);
-      if (!alim) return;
+  macSelect.addEventListener("change", async () => {
+    const v = macSelect.value;
+    if (!v) return;
+    const gramosEscritos = parseFloat(macGramos.value) || 0;
+    let alim, gramos;
+    if (v === "__nuevo") {
+      const r = await modalAlimentoMacro(gramosEscritos);
+      if (!r || r.invalido) {
+        macSelect.value = "";
+        if (r && r.invalido) toast("⚠️ Faltó el nombre o los gramos");
+        return;
+      }
+      gramos = r.gramos;
+      alim = { nombre: r.nombre, porcion: "", g: r.gramos, k: r.k, c: r.c, p: r.p, l: r.l };
       alimentosMacroCustom.push(alim);
       persistAlimentosMacro();
+    } else {
+      alim = buscarMacroAlimento(v);
+      if (!alim) { macSelect.value = ""; return; }
+      gramos = gramosEscritos > 0 ? gramosEscritos : (alim.g || 0);
+      if (!(gramos > 0)) {
+        toast("⚠️ Escribe los gramos primero: este alimento no tiene porción de referencia");
+        macSelect.value = "";
+        return;
+      }
     }
     if (!comidasMacros[nutricionFecha]) comidasMacros[nutricionFecha] = [];
     comidasMacros[nutricionFecha].push(crearEntradaMacro(alim, gramos));
@@ -1800,6 +1867,7 @@ function renderNutricion() {
       const idx = parseInt(chk.dataset.proteinaPolvo, 10);
       getComidasDelDia(nutricionFecha)[idx].proteinaPolvo = chk.checked;
       persistComidasDias();
+      renderNutricion();
     });
   });
   c.querySelectorAll("[data-producto-select]").forEach((sel) => {
