@@ -1423,6 +1423,54 @@ if (!routines || !routines.length) {
   routines = [rutinaOriginalPorDefecto()];
   saveJSON(LS.routines, routines);
 }
+// Repeticiones objetivo de la planilla original (Día → grupo → [fragmento del
+// nombre, texto]). Se vuelcan en "Indicaciones" SOLO de los ejercicios que las
+// tienen vacías — nunca pisan lo que ya escribiste. El fragmento del nombre
+// evita escribir en un ejercicio que cambiaste de lugar. Sirve igual para una
+// instalación nueva que para una rutina ya guardada en el celular.
+const OBJETIVOS_REPS = {
+  "dia 1": {
+    "1.1": ["press banco", "8-10 reps"], "1.2": ["hollow", "30\" (isométrico)"],
+    "2.1": ["press inclinado", "8-10 reps"], "2.2": ["elevacion lateral", "12-15 reps"],
+    "3.1": ["push up", "10-12 reps"], "3.2": ["triceps", "10-12 reps"],
+    "4.1": ["plancha", "45\" (isométrico)"], "4.2": ["abs en v", "20 reps"],
+    "5.1": ["press frances", "10-12 reps"],
+  },
+  "dia 2": {
+    "1.1": ["sentadilla", "12-15 reps"], "1.2": ["abduccion", "10-12 reps"],
+    "2.1": ["estocada", "10/10 (por lado)"], "2.2": ["adductores", "10-12 reps"],
+    "3.1": ["peso muerto", "12-15 reps"], "4.1": ["silla de cuadriceps", "12-15 reps"],
+    "5.2": ["pallof", "15/15 (por lado)"],
+  },
+  "dia 3": {
+    "1.1": ["pull over", "12-15 reps"], "2.1": ["dominadas", "8-10 reps"],
+    "3.1": ["remo en polea", "10/10 (por lado)"], "3.2": ["vuelos", "10/10 (por lado)"],
+    "4.1": ["remo con barra", "10-12 reps"], "4.2": ["curl de biceps en polea", "15 reps"],
+    "5.1": ["abdominales en v", "20 reps"], "5.2": ["scott", "Hasta el fallo"],
+    "6.1": ["plancha", "45\" (isométrico)"],
+  },
+};
+function aplicarObjetivosReps(lista) {
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/\p{Mark}/gu, "").trim();
+  let cambios = 0;
+  lista.forEach((r) => (r.dias || []).forEach((d) => {
+    const porGrupo = OBJETIVOS_REPS[norm(d.nombre)];
+    if (!porGrupo) return;
+    (d.ejercicios || []).forEach((e) => {
+      const obj = porGrupo[e.grupo];
+      if (obj && !e.indicaciones && norm(e.nombre).includes(obj[0])) { e.indicaciones = obj[1]; cambios++; }
+    });
+  }));
+  return cambios;
+}
+// Una sola vez por dispositivo (si después borras una indicación a propósito,
+// no vuelve a aparecer).
+try {
+  if (!localStorage.getItem("rutina_objetivos_reps_v1")) {
+    if (aplicarObjetivosReps(routines)) saveJSON(LS.routines, routines);
+    localStorage.setItem("rutina_objetivos_reps_v1", "1");
+  }
+} catch (e) { /* sin almacenamiento: queda como estaba */ }
 let sessions = loadJSON(LS.sessions, []);
 let activeRoutineId = loadJSON(LS.activeRoutine, routines[0].id);
 if (!routines.find((r) => r.id === activeRoutineId)) activeRoutineId = routines[0].id;
@@ -3262,7 +3310,7 @@ function importarDatos(e) {
       const ok = await modalConfirm("Importar datos", "Esto reemplazará tus datos actuales en este dispositivo por los del archivo. ¿Continuar?");
       if (!ok) return;
       if (data.profile) profile = data.profile;
-      if (Array.isArray(data.routines) && data.routines.length) routines = data.routines;
+      if (Array.isArray(data.routines) && data.routines.length) { routines = data.routines; aplicarObjetivosReps(routines); }
       if (Array.isArray(data.sessions)) sessions = data.sessions;
       if (data.nutricion) nutricion = data.nutricion;
       if (Array.isArray(data.alimentosCustom)) alimentosCustom = data.alimentosCustom;
