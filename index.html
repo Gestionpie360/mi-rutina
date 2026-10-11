@@ -777,6 +777,7 @@ const ALIMENTOS_GRUPOS = {
   lacteos: [
     "Queso 1 lámina (20g)", "Leche líquida 1 taza (200cc)", "Leche en polvo 3 cdas colmadas (20g)",
     "Yogurt 1 unidad (125 a 145g)", "Queso ricotta 2 cdas (30g)", "Queso crema 3 cdas (18g)", "Quesillo rodela de 3cm (60g)",
+    "Leche proteica Lonco Leche FullPro chocolate 1 envase (250 ml)",
   ],
   lipidos: [
     "Palta 3 cdas (90g)", "Mantequilla de maní 1 cda", "Frutos secos 1 puñado (25 a 30g)", "Nueces 5 unidades",
@@ -790,14 +791,14 @@ const PLANTILLAS_COMIDA = [
   { id: "desayuno", nombre: "Desayuno", extraProteinaPolvo: false, formula: [
     { grupo: "cereales", cant: 1 }, { grupo: "lipidos", cant: 1 }, { grupo: "carnes", cant: 1 }, { grupo: "lacteos", cant: 1 },
   ] },
-  { id: "colacion_manana", nombre: "Colación mañana", extraProteinaPolvo: true, formula: [
+  { id: "colacion_manana", nombre: "Colación mañana", extraProteinaPolvo: true, extraProductos: true, formula: [
     { grupo: "frutas", cant: 1 },
   ] },
   { id: "almuerzo", nombre: "Almuerzo", extraProteinaPolvo: false, formula: [
     { grupo: "cereales", cant: 1 }, { grupo: "carnes", cant: 3 }, { grupo: "verduras", cant: 2 },
     { grupo: "frutas", cant: 1 }, { grupo: "lacteos", cant: 1 }, { grupo: "aceites", cant: 0.5 },
   ] },
-  { id: "colacion_tarde", nombre: "Colación tarde", extraProteinaPolvo: false, formula: [
+  { id: "colacion_tarde", nombre: "Colación tarde", extraProteinaPolvo: false, extraProductos: true, formula: [
     { grupo: "frutas", cant: 1 }, { grupo: "cereales", cant: 1 }, { grupo: "lacteos", cant: 1 },
   ] },
   { id: "once_cena", nombre: "Once-Cena", extraProteinaPolvo: false, formula: [
@@ -961,6 +962,8 @@ const MACRO_ALIMENTOS = [
   ["Queso ricotta", "2 cdas", 30, 138, 5, 11, 8],
   ["Queso crema", "3 cdas", 18, 342, 4, 6, 34],
   ["Quesillo", "rodela de 3 cm", 60, 190, 2, 17, 13],
+  // Valores de la etiqueta (por 100 ml): 54 kcal · 4,8 g C · 8 g P · 0,3 g L; 1 envase = 250 ml.
+  ["Leche proteica Lonco Leche FullPro chocolate", "1 envase 250 ml", 250, 54, 4.8, 8, 0.3],
   ["Palta", "3 cdas", 90, 160, 9, 2, 15],
   ["Mantequilla de maní", "1 cda", 16, 588, 20, 25, 50],
   ["Frutos secos (mix)", "1 puñado", 28, 607, 21, 20, 54],
@@ -974,6 +977,8 @@ const MACRO_ALIMENTOS = [
   ["Semilla de chía", "4 cdas", 48, 486, 42, 17, 31],
   ["Semilla de zapallo", "4 cdas", 30, 559, 11, 30, 49],
   ["Aceite (maravilla, canola u oliva)", "1 cucharada", 13, 884, 0, 0, 100],
+  // Valores de la etiqueta (por 100 g): 385 kcal · 38,6 g C · 31,2 g P · 11,8 g L; 1 unidad = 45 g.
+  ["Barra Wild Protein chocolate naranja", "1 unidad 45 g", 45, 385, 38.6, 31.2, 11.8],
   ["Proteína en polvo (whey)", "1 scoop", 30, 400, 10, 80, 5],
 ];
 function catalogoMacros() {
@@ -1050,7 +1055,7 @@ const MACRO_POR_GRUPO = {
   ],
   lacteos: [
     "Queso laminado", "Leche descremada", "Leche en polvo descremada", "Yogurt natural descremado", "Queso ricotta",
-    "Queso crema", "Quesillo",
+    "Queso crema", "Quesillo", "Leche proteica Lonco Leche FullPro chocolate",
   ],
   lipidos: [
     "Palta", "Mantequilla de maní", "Frutos secos (mix)", "Nueces", "Almendras", "Maní", "Pistachos", "Avellanas",
@@ -1090,6 +1095,15 @@ function macrosDePorciones(comidas) {
 const SCOOP_DEFECTO = { kcal: 120, carb: 3, prot: 24, lip: 1.5 };
 function scoopActual() {
   return { ...SCOOP_DEFECTO, ...(nutricion.scoop || {}) };
+}
+// Productos con valores de su etiqueta: la leche proteica entra como 1 porción de lácteos (y suma a los
+// conteos); la barra suma a los conteos sin usar porciones, igual que el scoop.
+const LECHE_PRO_ALIMENTO = "Leche proteica Lonco Leche FullPro chocolate 1 envase (250 ml)";
+const BARRA_PRO_NOMBRE = "Barra Wild Protein chocolate naranja";
+function barraProteinaValores() {
+  const b = buscarMacroAlimento(BARRA_PRO_NOMBRE);
+  const f = b.g / 100;
+  return { g: b.g, kcal: b.k * f, carb: b.c * f, prot: b.p * f, lip: b.l * f };
 }
 function fmtMacro(n) {
   return (Math.round((Number(n) || 0) * 10) / 10).toLocaleString("es-CL");
@@ -1554,9 +1568,13 @@ function renderNutricion() {
   const totBase = totalesMacros(entradasMacro);
   // Lo elegido en "Comidas del día" (porciones) también suma, con el gramaje que indica el plan.
   const pm = macrosDePorciones(comidas);
+  const nBarras = comidas.filter((cm) => cm.barraProteina).length;
+  const barraV = barraProteinaValores();
   const totMacro = {
-    kcal: totBase.kcal + nScoops * scoopV.kcal + pm.tot.kcal, carb: totBase.carb + nScoops * scoopV.carb + pm.tot.carb,
-    prot: totBase.prot + nScoops * scoopV.prot + pm.tot.prot, lip: totBase.lip + nScoops * scoopV.lip + pm.tot.lip,
+    kcal: totBase.kcal + nScoops * scoopV.kcal + nBarras * barraV.kcal + pm.tot.kcal,
+    carb: totBase.carb + nScoops * scoopV.carb + nBarras * barraV.carb + pm.tot.carb,
+    prot: totBase.prot + nScoops * scoopV.prot + nBarras * barraV.prot + pm.tot.prot,
+    lip: totBase.lip + nScoops * scoopV.lip + nBarras * barraV.lip + pm.tot.lip,
   };
   const metaMacro = {
     kcal: parseFloat(nutricion.calorias) || 0, carb: parseFloat(nutricion.carbohidratos) || 0,
@@ -1643,6 +1661,21 @@ function renderNutricion() {
         </select></div>
       </div>
     ` : "";
+    const tieneLeche = cm.porciones.some((p) => p.alimento === LECHE_PRO_ALIMENTO);
+    const productosHtml = plantilla.extraProductos ? `
+      <div class="nutri-porcion-item" style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:8px;margin:0;font-weight:600;color:var(--text)">
+          <input type="checkbox" data-leche-pro="${idx}" ${tieneLeche ? "checked" : ""} style="width:auto;margin:0">
+          🥛 Leche proteica Lonco Leche FullPro (250 ml) — cuenta 1 lácteo y suma a tus conteos
+        </label>
+      </div>
+      <div class="nutri-porcion-item">
+        <label style="display:flex;align-items:center;gap:8px;margin:0;font-weight:600;color:var(--text)">
+          <input type="checkbox" data-barra-pro="${idx}" ${cm.barraProteina ? "checked" : ""} style="width:auto;margin:0">
+          🍫 Barra de proteína Wild Protein (45 g) — suma a tus conteos (no usa porciones)
+        </label>
+      </div>
+    ` : "";
     const abierta = idx === nutriComidaAbierta;
     const gruposOk = plantilla.formula.filter((f) => grupoCompleto(cm, f)).length;
     const completa = gruposOk === plantilla.formula.length;
@@ -1665,6 +1698,7 @@ function renderNutricion() {
           ${cm.platoSugerido ? `<div class="nutri-plato-idea">💡 Idea real de tu plan: <b>${esc(cm.platoSugerido)}</b></div>` : ""}
           ${filas}
           ${proteinaHtml}
+          ${productosHtml}
         </div>
       </div>
     `;
@@ -1678,6 +1712,7 @@ function renderNutricion() {
       return m ? { nombre: p.alimento, g: m.g, kcal: m.kcal, carb: m.carb, prot: m.prot, lip: m.lip } : { nombre: p.alimento, sin: true };
     });
     if (cm.proteinaPolvo) filas.push({ nombre: "💪 Proteína en polvo (1 scoop)", kcal: scoopV.kcal, carb: scoopV.carb, prot: scoopV.prot, lip: scoopV.lip });
+    if (cm.barraProteina) filas.push({ nombre: "🍫 Barra Wild Protein (1 unidad, 45 g)", kcal: barraV.kcal, carb: barraV.carb, prot: barraV.prot, lip: barraV.lip });
     if (cm.productoColacion) filas.push({ nombre: cm.productoColacion, sin: true });
     if (filas.length) seccionesResumen.push({ titulo: cm.nombre, filas });
   });
@@ -1698,7 +1733,7 @@ function renderNutricion() {
     return `<tr class="sec"><th colspan="5">${esc(s.titulo)}</th></tr>` +
       s.filas.map((f) => (f.sin
         ? `<tr><td>${esc(f.nombre)}</td><td colspan="4" class="sin">no suma: sin valores</td></tr>`
-        : `<tr><td>${esc(f.nombre)}${f.g && !/\(\s*\d+(?:[.,]\d+)?\s*g\)/.test(f.nombre) ? `<br><small>${fmtMacro(f.g)} g</small>` : ""}</td>${celdasMacro(f)}</tr>`)).join("") +
+        : `<tr><td>${esc(f.nombre)}${f.g && !/\(\s*\d+(?:[.,]\d+)?\s*(?:g|ml|cc)\)/.test(f.nombre) ? `<br><small>${fmtMacro(f.g)} g</small>` : ""}</td>${celdasMacro(f)}</tr>`)).join("") +
       (s.filas.length > 1 ? `<tr class="sub"><td>Subtotal</td>${celdasMacro(sub)}</tr>` : "");
   }).join("");
   const pctDe = (v, m) => (m > 0 ? Math.round((v / m) * 100) + "%" : "–");
@@ -1814,6 +1849,13 @@ function renderNutricion() {
             </div>
           </div>` : ""}
         ${pm.sinValores.length ? `<p class="exercise-hint">⚠️ No suman porque no tengo sus valores: ${esc(pm.sinValores.join("; "))}. Anótalos aquí con "+ Otro alimento" para que cuenten.</p>` : ""}
+        ${nBarras ? `
+          <div class="nutri-item">
+            <div>
+              <div class="exercise-name">🍫 Barra de proteína Wild Protein — ${nBarras} unidad${nBarras > 1 ? "es" : ""} (45 g)</div>
+              <div class="exercise-meta">${Math.round(nBarras * barraV.kcal)} kcal · C ${fmtMacro(nBarras * barraV.carb)} g · P ${fmtMacro(nBarras * barraV.prot)} g · L ${fmtMacro(nBarras * barraV.lip)} g<br>Viene de tu colación; para quitarla, desmárcala en "Comidas del día".</div>
+            </div>
+          </div>` : ""}
         ${nScoops ? `
           <div class="nutri-item">
             <div>
@@ -1831,7 +1873,7 @@ function renderNutricion() {
               <button class="icon-btn" data-edit-macro="${e.id}" title="Cambiar los gramos">✏️</button>
               <button class="icon-btn" data-del-macro="${e.id}" title="Quitar">🗑️</button>
             </span>
-          </div>`).join("") : ((nScoops || pm.contados || pm.sinValores.length) ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
+          </div>`).join("") : ((nScoops || nBarras || pm.contados || pm.sinValores.length) ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
       </div>
       ${entradasMacro.length ? `<button class="btn ghost small" id="nu_mac_vaciar">🗑️ Vaciar el conteo de este día</button>` : ""}
       </div>
@@ -2071,7 +2113,7 @@ function renderNutricion() {
       const ok = await modalConfirm("Vaciar comida", "¿Borrar todos los alimentos cargados en esta comida?");
       if (!ok) return;
       const cm = getComidasDelDia(nutricionFecha)[idx];
-      cm.porciones = []; cm.proteinaPolvo = false; cm.productoColacion = null; cm.platoSugerido = null;
+      cm.porciones = []; cm.proteinaPolvo = false; cm.productoColacion = null; cm.platoSugerido = null; cm.barraProteina = false;
       persistComidasDias();
       renderNutricion();
     });
@@ -2139,6 +2181,24 @@ function renderNutricion() {
       persistComidasDias();
       renderNutricion();
       toast("➕ Agregado");
+    });
+  });
+  c.querySelectorAll("[data-leche-pro]").forEach((chk) => {
+    chk.addEventListener("change", () => {
+      const cm = getComidasDelDia(nutricionFecha)[parseInt(chk.dataset.lechePro, 10)];
+      cm.porciones = cm.porciones.filter((p) => p.alimento !== LECHE_PRO_ALIMENTO);
+      if (chk.checked) {
+        cm.porciones.push({ id: "p_" + Math.random().toString(36).slice(2), grupo: "lacteos", alimento: LECHE_PRO_ALIMENTO, cantidad: 1 });
+      }
+      persistComidasDias();
+      renderNutricion();
+    });
+  });
+  c.querySelectorAll("[data-barra-pro]").forEach((chk) => {
+    chk.addEventListener("change", () => {
+      getComidasDelDia(nutricionFecha)[parseInt(chk.dataset.barraPro, 10)].barraProteina = chk.checked;
+      persistComidasDias();
+      renderNutricion();
     });
   });
   c.querySelectorAll("[data-proteina-polvo]").forEach((chk) => {
