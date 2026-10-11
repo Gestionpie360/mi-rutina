@@ -972,6 +972,72 @@ function totalesMacros(entradas) {
   return entradas.reduce((a, e) => ({ kcal: a.kcal + e.kcal, carb: a.carb + e.carb, prot: a.prot + e.prot, lip: a.lip + e.lip }),
     { kcal: 0, carb: 0, prot: 0, lip: 0 });
 }
+// A qué alimento del conteo corresponde cada alimento de las porciones (mismo orden que ALIMENTOS_GRUPOS),
+// para que lo elegido en "Comidas del día" también sume calorías y macros.
+const MACRO_POR_GRUPO = {
+  cereales: [
+    "Avena (cruda)", "Pan centeno hallulla", "Pan marraqueta", "Pan hallulla", "Pan molde blanco",
+    "Pan integral de molde", "Pan integral hallulla", "Pan centeno de molde", "Pan amasado", "Pan pita integral",
+    "Galletas de salvado", "Galletas de soda/agua", "Tortilla/fajita de trigo", "Granola", "Arroz blanco (cocido)",
+    "Arroz integral (cocido)", "Fideos (cocidos)", "Fideos integrales (cocidos)", "Cus cus (cocido)", "Quínoa (cocida)",
+    "Choclo (cocido)", "Haba (cocida)", "Papa (cocida)", "Arveja (cocida)", "Arveja (cocida)", "Camote (cocido)",
+    "Trigo mote (cocido)",
+  ],
+  carnes: [
+    "Atún en agua", "Pollo/ave (cocido)", "Huevo entero", "Jamón de pavo o pollo", "Vacuno magro (cocido)",
+    "Carne molida baja en grasa (cocida)", "Cerdo magro (cocido)", "Pavo (cocido)", "Carne vegetal (soya texturizada seca)",
+    "Poroto (cocido)", "Lenteja (cocida)", "Garbanzo (cocido)", "Arveja (cocida)",
+  ],
+  verduras: [
+    "Acelga (cocida)", "Alcachofa (cocida)", "Betarraga (cocida)", "Berenjena (cocida)", "Brócoli (cocido)",
+    "Champiñones (cocidos)", "Coliflor (cocida)", "Espárrago (cocido)", "Espinaca (cocida)", "Pickle",
+    "Poroto verde (cocido)", "Repollitos de Bruselas (cocidos)", "Zanahoria (cocida)", "Zapallitos italianos (cocidos)",
+    "Zapallo (cocido)", "Betarraga (cruda)", "Cebolla (cruda)", "Champiñones (crudos)", "Tomate", "Tomate cherry",
+    "Acelga (cruda)", "Achicoria", "Ajo", "Apio", "Cochayuyo", "Espinaca (cruda)", "Lechuga", "Pepino",
+    "Pimentón rojo", "Pimentón verde", "Rabanito", "Repollo", "Palmitos",
+  ],
+  frutas: [
+    "Manzana", "Naranja", "Pera", "Plátano", "Arándanos", "Frutillas", "Ciruelas", "Durazno", "Frambuesas", "Uvas",
+    "Kiwi", "Melón", "Sandía", "Mandarina", "Mora", "Pepino dulce", "Membrillo", "Piña", "Piña enlatada",
+  ],
+  lacteos: [
+    "Queso laminado", "Leche descremada", "Leche en polvo descremada", "Yogurt natural descremado", "Queso ricotta",
+    "Queso crema", "Quesillo",
+  ],
+  lipidos: [
+    "Palta", "Mantequilla de maní", "Frutos secos (mix)", "Nueces", "Almendras", "Maní", "Pistachos", "Avellanas",
+    "Castañas de cajú", "Semilla de linaza", "Semilla de chía", "Semilla de zapallo",
+  ],
+  aceites: [
+    "Aceite (maravilla, canola u oliva)", "Aceite (maravilla, canola u oliva)", "Aceite (maravilla, canola u oliva)",
+  ],
+};
+// Valores nutricionales de un alimento de las porciones (con el gramaje que indica el plan), o null si es uno propio.
+function macroDePorcion(grupo, alimento) {
+  const idx = (ALIMENTOS_GRUPOS[grupo] || []).indexOf(alimento);
+  if (idx < 0) return null;
+  const base = buscarMacroAlimento((MACRO_POR_GRUPO[grupo] || [])[idx]);
+  if (!base) return null;
+  const m = /\((\d+(?:[.,]\d+)?)\s*g\)/.exec(alimento);
+  const g = m ? parseFloat(m[1].replace(",", ".")) : base.g;
+  const f = g / 100;
+  return { g, kcal: base.k * f, carb: base.c * f, prot: base.p * f, lip: base.l * f };
+}
+function macrosDePorciones(comidas) {
+  const tot = { kcal: 0, carb: 0, prot: 0, lip: 0 };
+  let contados = 0;
+  const sinValores = [];
+  comidas.forEach((cm) => {
+    cm.porciones.forEach((p) => {
+      const m = macroDePorcion(p.grupo, p.alimento);
+      if (!m) { sinValores.push(p.alimento); return; }
+      tot.kcal += m.kcal; tot.carb += m.carb; tot.prot += m.prot; tot.lip += m.lip;
+      contados++;
+    });
+    if (cm.productoColacion) sinValores.push(cm.productoColacion);
+  });
+  return { tot, contados, sinValores: [...new Set(sinValores)] };
+}
 // Valores de 1 scoop de proteína en polvo (30 g de whey típico); editables en "Mis metas" según la etiqueta.
 const SCOOP_DEFECTO = { kcal: 120, carb: 3, prot: 24, lip: 1.5 };
 function scoopActual() {
@@ -1432,9 +1498,11 @@ function renderNutricion() {
   const nScoops = comidas.filter((cm) => cm.proteinaPolvo).length;
   const scoopV = scoopActual();
   const totBase = totalesMacros(entradasMacro);
+  // Lo elegido en "Comidas del día" (porciones) también suma, con el gramaje que indica el plan.
+  const pm = macrosDePorciones(comidas);
   const totMacro = {
-    kcal: totBase.kcal + nScoops * scoopV.kcal, carb: totBase.carb + nScoops * scoopV.carb,
-    prot: totBase.prot + nScoops * scoopV.prot, lip: totBase.lip + nScoops * scoopV.lip,
+    kcal: totBase.kcal + nScoops * scoopV.kcal + pm.tot.kcal, carb: totBase.carb + nScoops * scoopV.carb + pm.tot.carb,
+    prot: totBase.prot + nScoops * scoopV.prot + pm.tot.prot, lip: totBase.lip + nScoops * scoopV.lip + pm.tot.lip,
   };
   const metaMacro = {
     kcal: parseFloat(nutricion.calorias) || 0, carb: parseFloat(nutricion.carbohidratos) || 0,
@@ -1569,10 +1637,11 @@ function renderNutricion() {
 
     <div class="card">
       <h2>🔢 Mi conteo del día (calorías y macros)</h2>
-      <p class="exercise-hint">Elige el alimento y se suma al instante: la app cuenta calorías, carbohidratos,
-      proteínas y lípidos y los compara con tus metas de arriba, para que veas cuánto llevas y cuánto te falta.
-      Usa la porción de tu plan; si comiste otra cantidad, escribe los gramos <b>antes</b> de elegirlo, o corrígelos
-      después con ✏️. Si el alimento no está en la lista, elige "+ Otro alimento" y te pido sus valores.</p>
+      <p class="exercise-hint">Aquí se junta todo: la app cuenta calorías, carbohidratos, proteínas y lípidos y los
+      compara con tus metas de arriba, para que veas cuánto llevas y cuánto te falta. <b>Lo que elijas en "Comidas
+      del día" (y el scoop de proteína) se suma solo</b>, con la porción de tu plan. Para algo extra o de otra
+      cantidad, elígelo aquí abajo (escribe los gramos <b>antes</b> si no es la porción del plan; o corrígelos
+      después con ✏️). Si no está en la lista, elige "+ Otro alimento" y te pido sus valores.</p>
       ${barraMacroHtml("Calorías", "kcal", totMacro.kcal, metaMacro.kcal, false)}
       ${barraMacroHtml("Carbohidratos", "g", totMacro.carb, metaMacro.carb, false)}
       ${barraMacroHtml("Proteínas", "g", totMacro.prot, metaMacro.prot, true)}
@@ -1590,6 +1659,14 @@ function renderNutricion() {
         </div>
       </div>
       <div style="margin-top:12px">
+        ${pm.contados ? `
+          <div class="nutri-item">
+            <div>
+              <div class="exercise-name">🍽️ Lo que elegiste en "Comidas del día" — ${pm.contados} alimento${pm.contados > 1 ? "s" : ""}</div>
+              <div class="exercise-meta">${Math.round(pm.tot.kcal)} kcal · C ${fmtMacro(pm.tot.carb)} g · P ${fmtMacro(pm.tot.prot)} g · L ${fmtMacro(pm.tot.lip)} g<br>Con la porción de tu plan; para cambiarlo, quítalo o reemplázalo allá (🔄 / 🗑️).</div>
+            </div>
+          </div>` : ""}
+        ${pm.sinValores.length ? `<p class="exercise-hint">⚠️ No suman porque no tengo sus valores: ${esc(pm.sinValores.join("; "))}. Anótalos aquí con "+ Otro alimento" para que cuenten.</p>` : ""}
         ${nScoops ? `
           <div class="nutri-item">
             <div>
@@ -1607,7 +1684,7 @@ function renderNutricion() {
               <button class="icon-btn" data-edit-macro="${e.id}" title="Cambiar los gramos">✏️</button>
               <button class="icon-btn" data-del-macro="${e.id}" title="Quitar">🗑️</button>
             </span>
-          </div>`).join("") : (nScoops ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
+          </div>`).join("") : ((nScoops || pm.contados || pm.sinValores.length) ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
       </div>
       ${entradasMacro.length ? `<button class="btn ghost small" id="nu_mac_vaciar">🗑️ Vaciar el conteo de este día</button>` : ""}
     </div>
