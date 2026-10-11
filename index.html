@@ -412,6 +412,30 @@ textarea { resize: vertical; min-height: 60px; }
   padding: 8px 10px; font-size: .82rem; margin-bottom: 10px;
 }
 .nutri-plato-idea b { color: var(--accent); }
+/* Acordeones de Nutrición */
+.nutri-acc-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px;
+  background: transparent; border: none; color: var(--text); font: inherit;
+  text-align: left; cursor: pointer; padding: 4px 0; scroll-margin-top: 70px; flex-wrap: wrap; row-gap: 0;
+}
+.nutri-acc-chev { color: var(--text-dim); width: 14px; flex-shrink: 0; font-size: .8rem; }
+.nutri-acc-title { font-weight: 700; font-size: 1.05rem; flex: 1; min-width: 0; }
+.nutri-acc-sum {
+  flex: 0 0 100%; padding-left: 22px; font-size: .78rem; color: var(--text-dim);
+  font-variant-numeric: tabular-nums; text-align: left; margin-top: -2px;
+}
+.nutri-acc-sum:empty { display: none; }
+.nutri-acc-sum.ok { color: var(--ok); font-weight: 700; }
+.nutri-acc > .nutri-acc-head { padding: 0; }
+.nutri-acc.abierta { border-color: var(--accent); }
+.nutri-acc.abierta > .nutri-acc-head { margin-bottom: 12px; }
+.nutri-acc:not(.abierta) > .nutri-acc-body { display: none; }
+.nutri-acc:not(.abierta) { padding-top: 12px; padding-bottom: 12px; }
+.nutri-comida-toggle { flex: 1; min-width: 0; }
+.nutri-comida:not(.abierta) .nutri-comida-body { display: none; }
+.nutri-dia-acc { border-bottom: 1px solid var(--border); margin-top: 0; }
+.nutri-dia-acc:not(.abierta) .nutri-dia-body { display: none; }
+.nutri-dia-acc.abierta .nutri-dia-body { padding-bottom: 8px; }
 .nutri-bar-row { margin-bottom: 12px; }
 .nutri-bar-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .88rem; margin-bottom: 4px; }
 .nutri-bar-head span { color: var(--text-dim); font-size: .8rem; font-variant-numeric: tabular-nums; }
@@ -1206,6 +1230,11 @@ let alimentosMacroCustom = loadJSON(LS.macroCustom, []); // alimentos propios co
 let nutricionFecha = hoyISO();
 let nutricionPeriodo = 7; // días del reporte — solo preferencia de vista, no se persiste
 let nutricionSemana = 1; // semana de la minuta sugerida que se está viendo — solo preferencia de vista
+// Acordeones de Nutrición (solo preferencia de vista): sección abierta, comida abierta y día del menú abierto.
+let nutriSeccion = "conteo"; // null = todas cerradas
+let nutriComidaAbierta; // índice; undefined = se decide al dibujar (la primera incompleta); -1 = ninguna
+let nutriDiaMenu; // 0 = lunes; undefined = el día de hoy; -1 = ninguno
+let nutriScrollA = null; // selector al que llevar la vista tras dibujar
 let routines = loadJSON(LS.routines, null);
 if (!routines || !routines.length) {
   routines = [rutinaOriginalPorDefecto()];
@@ -1531,6 +1560,23 @@ function renderNutricion() {
     </div>`;
   }
 
+  // --- Acordeones: cabecera con resumen para no tener que abrir cada sección ---
+  const abre = (id) => nutriSeccion === id;
+  const accHead = (id, titulo, resumen) =>
+    `<button type="button" class="nutri-acc-head" data-nutri-sec="${id}" aria-expanded="${abre(id)}">` +
+    `<span class="nutri-acc-chev">${abre(id) ? "▾" : "▸"}</span><span class="nutri-acc-title">${titulo}</span>` +
+    `<span class="nutri-acc-sum">${resumen}</span></button>`;
+  const kcalTxt = (n) => Math.round(n).toLocaleString("es-CL");
+  const resumenMetas = `${kcalTxt(metaMacro.kcal)} kcal · P ${fmtMacro(metaMacro.prot)} g`;
+  const resumenConteo = `${kcalTxt(totMacro.kcal)} / ${kcalTxt(metaMacro.kcal)} kcal · P ${fmtMacro(totMacro.prot)}/${fmtMacro(metaMacro.prot)} g`;
+  const porcionesCumplidas = GRUPOS_NUTRICION.reduce((a, g) => a + Math.min(consumidoDia[g.id] || 0, nutricion.metasPorciones[g.id] || 0), 0);
+  const resumenComidas = `${fmtPorcion(porcionesCumplidas)}/${fmtPorcion(metaTotalDia)} porciones`;
+  const plantillaDe = (cm) => PLANTILLAS_COMIDA.find((p) => p.id === cm.plantillaId) || PLANTILLAS_COMIDA[0];
+  const grupoCompleto = (cm, f) => cm.porciones.filter((p) => p.grupo === f.grupo).reduce((a, p) => a + p.cantidad, 0) >= f.cant;
+  const comidaCompleta = (cm) => plantillaDe(cm).formula.every((f) => grupoCompleto(cm, f));
+  if (nutriComidaAbierta === undefined) nutriComidaAbierta = comidas.findIndex((cm) => !comidaCompleta(cm));
+  const diaMenuAbierto = nutriDiaMenu === undefined ? (new Date().getDay() + 6) % 7 : nutriDiaMenu;
+
   function filaGrupoHtml(cm, comidaIdx, grupoId, cantRequerida) {
     const grupo = GRUPOS_NUTRICION.find((g) => g.id === grupoId);
     const itemsGrupo = cm.porciones.filter((p) => p.grupo === grupoId);
@@ -1572,10 +1618,17 @@ function renderNutricion() {
         </select></div>
       </div>
     ` : "";
+    const abierta = idx === nutriComidaAbierta;
+    const gruposOk = plantilla.formula.filter((f) => grupoCompleto(cm, f)).length;
+    const completa = gruposOk === plantilla.formula.length;
     return `
-      <div class="day-block nutri-comida">
+      <div class="day-block nutri-comida ${abierta ? "abierta" : ""}">
         <div class="nutri-comida-head">
-          <h2>${esc(cm.nombre)}</h2>
+          <button type="button" class="nutri-acc-head nutri-comida-toggle" data-nutri-comida="${idx}" aria-expanded="${abierta}">
+            <span class="nutri-acc-chev">${abierta ? "▾" : "▸"}</span>
+            <span class="nutri-acc-title" style="font-size:.95rem">${esc(cm.nombre)}</span>
+            <span class="nutri-acc-sum ${completa ? "ok" : ""}">${completa ? "✅ " : ""}${gruposOk}/${plantilla.formula.length} grupos</span>
+          </button>
           <div class="block-vol-actions">
             <button class="icon-btn" data-sugerir-combo="${idx}" title="Sugerir combo al azar">🎲</button>
             <button class="icon-btn" data-vaciar-comida="${idx}" title="Vaciar esta comida">🗑️</button>
@@ -1598,8 +1651,9 @@ function renderNutricion() {
       <input id="nu_fecha" type="date" value="${esc(nutricionFecha)}" style="width:auto;margin:0">
     </div>
 
-    <div class="card">
-      <h2>🎯 Mis metas (según mi plan nutricional)</h2>
+    <div class="card nutri-acc ${abre("metas") ? "abierta" : ""}">
+      ${accHead("metas", "🎯 Mis metas (según mi plan)", resumenMetas)}
+      <div class="nutri-acc-body">
       <p class="exercise-hint">Estos son los números que te dio tu nutricionista — vienen precargados, pero
       son editables por si tu plan cambia en un próximo control.</p>
       <div class="field-row">
@@ -1633,10 +1687,12 @@ function renderNutricion() {
         `).join("")}
       </div>
       <button class="btn block" id="nu_guardar">Guardar mis metas</button>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>🔢 Mi conteo del día (calorías y macros)</h2>
+    <div class="card nutri-acc ${abre("conteo") ? "abierta" : ""}">
+      ${accHead("conteo", "🔢 Mi conteo del día", resumenConteo)}
+      <div class="nutri-acc-body">
       <p class="exercise-hint">Aquí se junta todo: la app cuenta calorías, carbohidratos, proteínas y lípidos y los
       compara con tus metas de arriba, para que veas cuánto llevas y cuánto te falta. <b>Lo que elijas en "Comidas
       del día" (y el scoop de proteína) se suma solo</b>, con la porción de tu plan. Para algo extra o de otra
@@ -1687,10 +1743,12 @@ function renderNutricion() {
           </div>`).join("") : ((nScoops || pm.contados || pm.sinValores.length) ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
       </div>
       ${entradasMacro.length ? `<button class="btn ghost small" id="nu_mac_vaciar">🗑️ Vaciar el conteo de este día</button>` : ""}
+      </div>
     </div>
 
-    <div class="card">
-      <h2>🍽️ Comidas del día (porciones de tu plan)</h2>
+    <div class="card nutri-acc ${abre("comidas") ? "abierta" : ""}">
+      ${accHead("comidas", "🍽️ Comidas del día", resumenComidas)}
+      <div class="nutri-acc-body">
       <p class="exercise-hint">Cada comida ya trae la fórmula de tu plan (ej. almuerzo = 1 cereal + 3 carnes +
       2 verduras + 1 fruta + 1 lácteo + ½ aceite). Elige un alimento por grupo, o toca 🎲 para que te arme una
       combinación al azar con los alimentos y marcas de tu plan.</p>
@@ -1699,11 +1757,13 @@ function renderNutricion() {
       </div>
       ${comidas.map(comidaHtml).join("")}
       <button class="btn ghost block" id="nu_add_comida">+ Comida</button>
+      </div>
     </div>
 
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <h2>📊 Reporte</h2>
+    <div class="card nutri-acc ${abre("reporte") ? "abierta" : ""}">
+      ${accHead("reporte", "📊 Reporte", `${registrados.length}/${nutricionPeriodo} días`)}
+      <div class="nutri-acc-body">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
         <select id="nu_periodo" style="width:auto;margin:0">
           <option value="7" ${nutricionPeriodo === 7 ? "selected" : ""}>Últimos 7 días</option>
           <option value="14" ${nutricionPeriodo === 14 ? "selected" : ""}>Últimos 14 días</option>
@@ -1719,10 +1779,12 @@ function renderNutricion() {
       </div>
       <div class="chart-wrap">${buildChartPorciones(datosPeriodo, metaTotalDia)}</div>
       <p style="margin-top:10px">${esc(resumenTexto)}</p>
+      </div>
     </div>
 
-    <div class="card">
-      <h2>📋 Menú sugerido de tu nutricionista</h2>
+    <div class="card nutri-acc ${abre("menu") ? "abierta" : ""}">
+      ${accHead("menu", "📋 Menú sugerido", `Semana ${nutricionSemana}`)}
+      <div class="nutri-acc-body">
       <p class="exercise-hint">Las 4 semanas de minuta que te armó tu nutricionista, para consultar qué te
       tocaba comer. Es solo referencia — puedes seguirla al pie de la letra o armar tu propia combinación
       arriba en "Comidas del día".</p>
@@ -1734,17 +1796,24 @@ function renderNutricion() {
       </select>
       ${DIAS_SEMANA.map((dia, i) => {
         const m = MINUTA_SUGERIDA[nutricionSemana][i];
+        const abiertoDia = i === diaMenuAbierto;
         return `
-          <div class="nutri-menu-dia">
-            <h3 style="margin-bottom:4px">${dia}</h3>
-            <div class="nutri-menu-fila"><b>Desayuno</b><span>${esc(m.d)}</span></div>
-            <div class="nutri-menu-fila"><b>Colación</b><span>Fruta + proteína en polvo</span></div>
-            <div class="nutri-menu-fila"><b>Almuerzo</b><span>${esc(m.a)}</span></div>
-            <div class="nutri-menu-fila"><b>Colación</b><span>${esc(m.c2)}</span></div>
-            <div class="nutri-menu-fila"><b>Once-Cena</b><span>${esc(m.o)}</span></div>
+          <div class="nutri-menu-dia nutri-dia-acc ${abiertoDia ? "abierta" : ""}">
+            <button type="button" class="nutri-acc-head" data-nutri-dia="${i}" aria-expanded="${abiertoDia}">
+              <span class="nutri-acc-chev">${abiertoDia ? "▾" : "▸"}</span>
+              <span class="nutri-acc-title" style="font-size:.95rem">${dia}</span>
+            </button>
+            <div class="nutri-dia-body">
+              <div class="nutri-menu-fila"><b>Desayuno</b><span>${esc(m.d)}</span></div>
+              <div class="nutri-menu-fila"><b>Colación</b><span>Fruta + proteína en polvo</span></div>
+              <div class="nutri-menu-fila"><b>Almuerzo</b><span>${esc(m.a)}</span></div>
+              <div class="nutri-menu-fila"><b>Colación</b><span>${esc(m.c2)}</span></div>
+              <div class="nutri-menu-fila"><b>Once-Cena</b><span>${esc(m.o)}</span></div>
+            </div>
           </div>
         `;
       }).join("")}
+      </div>
     </div>
   `;
 
@@ -1763,6 +1832,7 @@ function renderNutricion() {
   });
   document.getElementById("nu_fecha").addEventListener("change", (e) => {
     nutricionFecha = e.target.value || hoyISO();
+    nutriComidaAbierta = undefined; // al cambiar de día, se vuelve a abrir la primera comida incompleta
     renderNutricion();
   });
   document.getElementById("nu_periodo").addEventListener("change", (e) => {
@@ -1773,6 +1843,37 @@ function renderNutricion() {
     nutricionSemana = parseInt(e.target.value, 10);
     renderNutricion();
   });
+
+  // --- Acordeones: una sección abierta a la vez; dentro, una comida y un día del menú ---
+  c.querySelectorAll("[data-nutri-sec]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const id = b.dataset.nutriSec;
+      nutriSeccion = nutriSeccion === id ? null : id;
+      if (nutriSeccion) nutriScrollA = `[data-nutri-sec="${id}"]`;
+      renderNutricion();
+    });
+  });
+  c.querySelectorAll("[data-nutri-comida]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const i = parseInt(b.dataset.nutriComida, 10);
+      nutriComidaAbierta = nutriComidaAbierta === i ? -1 : i;
+      if (nutriComidaAbierta === i) nutriScrollA = `[data-nutri-comida="${i}"]`;
+      renderNutricion();
+    });
+  });
+  c.querySelectorAll("[data-nutri-dia]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const i = parseInt(b.dataset.nutriDia, 10);
+      nutriDiaMenu = diaMenuAbierto === i ? -1 : i;
+      if (nutriDiaMenu === i) nutriScrollA = `[data-nutri-dia="${i}"]`;
+      renderNutricion();
+    });
+  });
+  if (nutriScrollA) {
+    const destino = c.querySelector(nutriScrollA);
+    nutriScrollA = null;
+    if (destino) destino.scrollIntoView({ block: "start" });
+  }
 
   // --- Conteo de calorías y macros ---
   // Al elegir el alimento se suma de inmediato: con los gramos escritos arriba, o con la porción del plan.
