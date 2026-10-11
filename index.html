@@ -19,6 +19,11 @@
   --warn: #d97706;
   --radius: 14px;
   --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  /* Colores de nutrición: reservados solo para calorías y macros, iguales en todas las pantallas. */
+  --m-kcal: #2563eb;
+  --m-carb: #c2410c;
+  --m-prot: #be185d;
+  --m-lip: #6d28d9;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,6 +39,10 @@
     --ok: #4ade80;
     --warn: #fbbf24;
     --shadow: 0 1px 3px rgba(0,0,0,.4), 0 1px 2px rgba(0,0,0,.3);
+    --m-kcal: #60a5fa;
+    --m-carb: #fb923c;
+    --m-prot: #f472b6;
+    --m-lip: #a78bfa;
   }
 }
 
@@ -435,7 +444,20 @@ textarea { resize: vertical; min-height: 60px; }
 .nutri-resumen td.sin { text-align: left; color: var(--warn); font-size: .74rem; }
 .nutri-resumen tfoot td { font-weight: 700; }
 .nutri-resumen tfoot tr.tot td { border-top: 2px solid var(--accent); }
-.nutri-resumen .pasa, .pasa { color: var(--warn); }
+.nutri-resumen .pasa, .pasa { color: var(--danger); font-weight: 700; }
+.nutri-resumen thead th.c-kcal { color: var(--m-kcal); border-bottom: 2px solid var(--m-kcal); }
+.nutri-resumen thead th.c-carb { color: var(--m-carb); border-bottom: 2px solid var(--m-carb); }
+.nutri-resumen thead th.c-prot { color: var(--m-prot); border-bottom: 2px solid var(--m-prot); }
+.nutri-resumen thead th.c-lip { color: var(--m-lip); border-bottom: 2px solid var(--m-lip); }
+.nutri-resumen tfoot td.c-kcal { color: var(--m-kcal); }
+.nutri-resumen tfoot td.c-carb { color: var(--m-carb); }
+.nutri-resumen tfoot td.c-prot { color: var(--m-prot); }
+.nutri-resumen tfoot td.c-lip { color: var(--m-lip); }
+.nutri-resumen tfoot tr.tot td { font-size: .9rem; background: var(--bg); }
+/* Pulido general */
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bn-btn.active { box-shadow: inset 0 2px 0 var(--accent); }
+h2 { letter-spacing: -.01em; }
 /* Acordeones de Nutrición */
 .nutri-acc-head {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px;
@@ -460,16 +482,76 @@ textarea { resize: vertical; min-height: 60px; }
 .nutri-dia-acc { border-bottom: 1px solid var(--border); margin-top: 0; }
 .nutri-dia-acc:not(.abierta) .nutri-dia-body { display: none; }
 .nutri-dia-acc.abierta .nutri-dia-body { padding-bottom: 8px; }
-.nutri-bar-row { margin-bottom: 12px; }
-.nutri-bar-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: .88rem; margin-bottom: 4px; }
-.nutri-bar-head span { color: var(--text-dim); font-size: .8rem; font-variant-numeric: tabular-nums; }
-.nutri-bar { height: 10px; border-radius: 999px; background: var(--border); overflow: hidden; }
-.nutri-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); }
-.nutri-bar-fill.ok { background: var(--ok); }
-.nutri-bar-fill.over { background: var(--warn); }
-.nutri-bar-foot { font-size: .8rem; color: var(--text-dim); margin-top: 3px; }
+/* --- Etiquetas de color de calorías y macros (kcal · C · P · L) --- */
+.mpills { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.mpill {
+  --pc: var(--accent);
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 999px;
+  font-size: .74rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1.5;
+  color: var(--pc);
+  background: color-mix(in srgb, var(--pc) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--pc) 32%, transparent);
+}
+.mpill i { font-style: normal; font-weight: 800; opacity: .9; }
+.mpill.kcal, .mlabel.kcal, .m-kcal { --pc: var(--m-kcal); }
+.mpill.carb, .mlabel.carb, .m-carb { --pc: var(--m-carb); }
+.mpill.prot, .mlabel.prot, .m-prot { --pc: var(--m-prot); }
+.mpill.lip, .mlabel.lip, .m-lip { --pc: var(--m-lip); }
+.mpill.hoy { --pc: var(--ok); }
+.mlabel { --pc: var(--accent); display: inline-flex; align-items: center; gap: 7px; font-weight: 700; font-size: .92rem; }
+.mlabel::before { content: ""; width: 10px; height: 10px; border-radius: 3px; background: var(--pc); flex-shrink: 0; }
+
+/* --- Anillo de calorías + ecuación Meta − Comido = Restan --- */
+.nutri-hero { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; padding: 4px 0 12px; }
+.nutri-ring { position: relative; width: 132px; height: 132px; flex-shrink: 0; }
+.nutri-ring svg { display: block; }
+.nutri-ring-track { fill: none; stroke: var(--border); stroke-width: 11; }
+.nutri-ring-fill { fill: none; stroke: var(--m-kcal); stroke-width: 11; stroke-linecap: round; transition: stroke-dashoffset .5s ease; }
+.nutri-ring.excedido .nutri-ring-fill { stroke: var(--danger); }
+.nutri-ring-centro {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; line-height: 1.15;
+}
+.nutri-ring-centro b { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.nutri-ring.excedido .nutri-ring-centro b { color: var(--danger); }
+.nutri-ring-centro span { font-size: .68rem; color: var(--text-dim); font-weight: 600; }
+.nutri-eq { display: flex; align-items: center; gap: 8px; }
+.nutri-eq > div { text-align: center; min-width: 64px; }
+.nutri-eq b { display: block; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.nutri-eq span { font-size: .66rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.nutri-eq i { font-style: normal; color: var(--text-dim); font-size: 1.1rem; }
+.nutri-eq .res b { color: var(--m-kcal); }
+.nutri-eq .mas b { color: var(--danger); }
+.nutri-hero-cap { flex: 0 0 100%; text-align: center; font-size: .8rem; color: var(--text-dim); margin-top: -2px; }
+
+/* --- Barras de macros --- */
+.nutri-bar-row { --pc: var(--accent); margin-bottom: 14px; }
+.nutri-bar-row.m-kcal { --pc: var(--m-kcal); }
+.nutri-bar-row.m-carb { --pc: var(--m-carb); }
+.nutri-bar-row.m-prot { --pc: var(--m-prot); }
+.nutri-bar-row.m-lip { --pc: var(--m-lip); }
+.nutri-bar-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+.nutri-bar-head > span { color: var(--text-dim); font-size: .8rem; font-variant-numeric: tabular-nums; }
+.nutri-bar { height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--pc) 14%, var(--border)); overflow: hidden; }
+.nutri-bar-fill { height: 100%; border-radius: 999px; background: var(--pc); transition: width .4s ease; }
+.nutri-bar-fill.over {
+  background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.4) 0 5px, transparent 5px 10px);
+}
+.nutri-bar-foot { font-size: .8rem; color: var(--text-dim); margin-top: 4px; }
 .nutri-bar-foot.ok { color: var(--ok); font-weight: 700; }
-.nutri-bar-foot.over { color: var(--warn); font-weight: 700; }
+.nutri-bar-foot.over { color: var(--danger); font-weight: 700; }
+.nutri-nota { font-size: .74rem; color: var(--text-dim); margin-top: 4px; }
+
+/* --- Navegación del día --- */
+.nutri-dia-card { display: flex; align-items: center; gap: 8px; padding: 10px 12px; }
+.nutri-dia-mov {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text); font-size: 1.3rem; font-weight: 700; cursor: pointer; line-height: 1;
+}
+.nutri-dia-mov:active { transform: scale(.94); }
+.nutri-dia-centro { flex: 1; min-width: 0; text-align: center; }
+.nutri-dia-nombre { font-weight: 800; font-size: 1rem; text-transform: capitalize; display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nutri-dia-centro input { margin: 4px auto 0; width: auto; padding: 5px 8px; font-size: .85rem; text-align: center; }
 
 /* Modales */
 .modal-overlay {
@@ -1108,6 +1190,14 @@ function barraProteinaValores() {
 function fmtMacro(n) {
   return (Math.round((Number(n) || 0) * 10) / 10).toLocaleString("es-CL");
 }
+// Etiquetas de color: kcal (azul) · C carbohidratos (naranja) · P proteínas (rosa) · L lípidos (violeta).
+// Cada una lleva su letra, así el color nunca es la única señal.
+function pillsMacro(kcal, carb, prot, lip) {
+  return `<span class="mpills"><span class="mpill kcal">${Math.round(kcal).toLocaleString("es-CL")} kcal</span>` +
+    `<span class="mpill carb"><i>C</i> ${fmtMacro(carb)} g</span>` +
+    `<span class="mpill prot"><i>P</i> ${fmtMacro(prot)} g</span>` +
+    `<span class="mpill lip"><i>L</i> ${fmtMacro(lip)} g</span></span>`;
+}
 // Qué campo de MINUTA_SUGERIDA trae el nombre real de plato para cada plantilla de comida.
 const PLANTILLA_CAMPO_MINUTA = { desayuno: "d", almuerzo: "a", once_cena: "o", colacion_tarde: "c2" };
 function platosReferencia(campo) {
@@ -1545,6 +1635,11 @@ function modalAlimentoMacro(gramosIniciales) {
       } },
   ]);
 }
+function nombreDiaLargo(fechaISO) {
+  const [y, m, d] = fechaISO.split("-").map(Number);
+  const nombre = new Date(y, m - 1, d).toLocaleDateString("es-CL", { weekday: "long" });
+  return `${nombre} ${fmtFecha(fechaISO)}`;
+}
 function renderNutricion() {
   const c = document.getElementById("nutricionContent");
   const comidas = getComidasDelDia(nutricionFecha);
@@ -1580,10 +1675,11 @@ function renderNutricion() {
     kcal: parseFloat(nutricion.calorias) || 0, carb: parseFloat(nutricion.carbohidratos) || 0,
     prot: parseFloat(nutricion.proteinas) || 0, lip: parseFloat(nutricion.lipidos) || 0,
   };
-  function barraMacroHtml(titulo, unidad, cons, meta, esProteina) {
+  function barraMacroHtml(titulo, unidad, cons, meta, esProteina, tipo) {
     const consTxt = unidad === "kcal" ? Math.round(cons).toLocaleString("es-CL") : fmtMacro(cons);
+    const etiqueta = `<span class="mlabel ${tipo}">${titulo}</span>`;
     if (!(meta > 0)) {
-      return `<div class="nutri-bar-row"><div class="nutri-bar-head"><b>${titulo}</b><span>${consTxt} ${unidad}</span></div>
+      return `<div class="nutri-bar-row m-${tipo}"><div class="nutri-bar-head">${etiqueta}<span>${consTxt} ${unidad}</span></div>
         <div class="nutri-bar-foot">Define tu meta arriba para ver cuánto te falta.</div></div>`;
     }
     const metaTxt = unidad === "kcal" ? Math.round(meta).toLocaleString("es-CL") : fmtMacro(meta);
@@ -1596,8 +1692,8 @@ function renderNutricion() {
     else if (esProteina) { estado = `Superaste tu meta por ${fmtD(-falta)} ${unidad} ✅`; clase = "ok"; }
     else if (pct <= 105) { estado = `Meta cumplida ✅ (+${fmtD(-falta)} ${unidad})`; clase = "ok"; }
     else { estado = `Te pasaste por ${fmtD(-falta)} ${unidad}`; clase = "over"; }
-    return `<div class="nutri-bar-row">
-      <div class="nutri-bar-head"><b>${titulo}</b><span>Llevas ${consTxt} de ${metaTxt} ${unidad}</span></div>
+    return `<div class="nutri-bar-row m-${tipo}">
+      <div class="nutri-bar-head">${etiqueta}<span>Llevas ${consTxt} de ${metaTxt} ${unidad}</span></div>
       <div class="nutri-bar"><div class="nutri-bar-fill ${clase}" style="width:${Math.min(100, Math.max(0, pct)).toFixed(1)}%"></div></div>
       <div class="nutri-bar-foot ${clase}">${estado}</div>
     </div>`;
@@ -1610,8 +1706,39 @@ function renderNutricion() {
     `<span class="nutri-acc-chev">${abre(id) ? "▾" : "▸"}</span><span class="nutri-acc-title">${titulo}</span>` +
     `<span class="nutri-acc-sum">${resumen}</span></button>`;
   const kcalTxt = (n) => Math.round(n).toLocaleString("es-CL");
-  const resumenMetas = `${kcalTxt(metaMacro.kcal)} kcal · P ${fmtMacro(metaMacro.prot)} g`;
-  const resumenConteo = `${kcalTxt(totMacro.kcal)} / ${kcalTxt(metaMacro.kcal)} kcal · P ${fmtMacro(totMacro.prot)}/${fmtMacro(metaMacro.prot)} g`;
+  const resumenMetas = pillsMacro(metaMacro.kcal, metaMacro.carb, metaMacro.prot, metaMacro.lip);
+  const resumenConteo = `<span class="mpills">` +
+    `<span class="mpill kcal">${kcalTxt(totMacro.kcal)} / ${kcalTxt(metaMacro.kcal)} kcal</span>` +
+    `<span class="mpill carb"><i>C</i> ${fmtMacro(totMacro.carb)}/${fmtMacro(metaMacro.carb)}</span>` +
+    `<span class="mpill prot"><i>P</i> ${fmtMacro(totMacro.prot)}/${fmtMacro(metaMacro.prot)}</span>` +
+    `<span class="mpill lip"><i>L</i> ${fmtMacro(totMacro.lip)}/${fmtMacro(metaMacro.lip)}</span></span>`;
+
+  // --- Anillo de calorías: lo primero que se mira es cuántas calorías te restan ---
+  const restanKcal = metaMacro.kcal - totMacro.kcal;
+  const excedidoKcal = metaMacro.kcal > 0 && restanKcal < -0.5;
+  const pctRing = metaMacro.kcal > 0 ? Math.min(100, Math.max(0, (totMacro.kcal / metaMacro.kcal) * 100)) : 0;
+  const RADIO_RING = 52, CIRC_RING = 2 * Math.PI * RADIO_RING;
+  const heroHtml = metaMacro.kcal > 0 ? `
+    <div class="nutri-hero">
+      <div class="nutri-ring ${excedidoKcal ? "excedido" : ""}" role="img"
+           aria-label="${excedidoKcal ? "Te pasaste por " + kcalTxt(-restanKcal) : "Te restan " + kcalTxt(restanKcal)} kcal">
+        <svg viewBox="0 0 120 120" width="132" height="132" aria-hidden="true">
+          <circle class="nutri-ring-track" cx="60" cy="60" r="${RADIO_RING}"></circle>
+          <circle class="nutri-ring-fill" cx="60" cy="60" r="${RADIO_RING}" transform="rotate(-90 60 60)"
+                  stroke-dasharray="${CIRC_RING.toFixed(1)}" stroke-dashoffset="${(CIRC_RING * (1 - pctRing / 100)).toFixed(1)}"></circle>
+        </svg>
+        <div class="nutri-ring-centro">
+          <b>${kcalTxt(Math.abs(restanKcal))}</b>
+          <span>${excedidoKcal ? "kcal de más" : "kcal restantes"}</span>
+        </div>
+      </div>
+      <div class="nutri-eq">
+        <div><b>${kcalTxt(metaMacro.kcal)}</b><span>Meta</span></div><i>−</i>
+        <div><b>${kcalTxt(totMacro.kcal)}</b><span>Comido</span></div><i>=</i>
+        <div class="${excedidoKcal ? "mas" : "res"}"><b>${kcalTxt(Math.abs(restanKcal))}</b><span>${excedidoKcal ? "De más" : "Restan"}</span></div>
+      </div>
+      <div class="nutri-hero-cap">Llevas ${kcalTxt(totMacro.kcal)} de ${kcalTxt(metaMacro.kcal)} kcal (${Math.round((totMacro.kcal / metaMacro.kcal) * 100)}%)</div>
+    </div>` : `<p class="exercise-hint">Define tu meta de calorías en "Mis metas" para ver cuánto te resta.</p>`;
   const porcionesCumplidas = GRUPOS_NUTRICION.reduce((a, g) => a + Math.min(consumidoDia[g.id] || 0, nutricion.metasPorciones[g.id] || 0), 0);
   const resumenComidas = `${fmtPorcion(porcionesCumplidas)}/${fmtPorcion(metaTotalDia)} porciones`;
   const plantillaDe = (cm) => PLANTILLAS_COMIDA.find((p) => p.id === cm.plantillaId) || PLANTILLAS_COMIDA[0];
@@ -1725,7 +1852,8 @@ function renderNutricion() {
   const sumaFilas = (filas) => filas.reduce((a, f) => (f.sin ? a : {
     kcal: a.kcal + f.kcal, carb: a.carb + f.carb, prot: a.prot + f.prot, lip: a.lip + f.lip,
   }), { kcal: 0, carb: 0, prot: 0, lip: 0 });
-  const celdasMacro = (o) => `<td>${kcalTxt(o.kcal)}</td><td>${fmtMacro(o.carb)}</td><td>${fmtMacro(o.prot)}</td><td>${fmtMacro(o.lip)}</td>`;
+  const celdasMacro = (o) => `<td class="c-kcal">${kcalTxt(o.kcal)}</td><td class="c-carb">${fmtMacro(o.carb)}</td><td class="c-prot">${fmtMacro(o.prot)}</td><td class="c-lip">${fmtMacro(o.lip)}</td>`;
+  const celdas4 = (a, b, c2, d) => `<td class="c-kcal">${a}</td><td class="c-carb">${b}</td><td class="c-prot">${c2}</td><td class="c-lip">${d}</td>`;
   const totResumen = { kcal: 0, carb: 0, prot: 0, lip: 0 };
   const cuerpoResumen = seccionesResumen.map((s) => {
     const sub = sumaFilas(s.filas);
@@ -1745,18 +1873,18 @@ function renderNutricion() {
   };
   const resumenHtml = `
     <div class="card">
-      <h2>📋 Qué aportó cada alimento — ${esc(fmtFecha(nutricionFecha))}</h2>
+      <h2>📋 Qué aportó cada alimento</h2>
       <p class="exercise-hint">Todo lo que anotaste este día (de "Comidas del día", el scoop y lo anotado aparte) con lo que
       aporta cada alimento a cada conteo. <b>C</b> = carbohidratos, <b>P</b> = proteínas, <b>L</b> = lípidos (en gramos).</p>
       ${seccionesResumen.length ? `
         <div class="table-scroll"><table class="nutri-resumen">
-          <thead><tr><th>Alimento</th><th>kcal</th><th>C</th><th>P</th><th>L</th></tr></thead>
+          <thead><tr><th>Alimento</th><th class="c-kcal">kcal</th><th class="c-carb">C</th><th class="c-prot">P</th><th class="c-lip">L</th></tr></thead>
           <tbody>${cuerpoResumen}</tbody>
           <tfoot>
             <tr class="tot"><td>Total del día</td>${celdasMacro(totResumen)}</tr>
-            <tr><td>Tu meta</td><td>${kcalTxt(metaMacro.kcal)}</td><td>${fmtMacro(metaMacro.carb)}</td><td>${fmtMacro(metaMacro.prot)}</td><td>${fmtMacro(metaMacro.lip)}</td></tr>
-            <tr><td>% de tu meta</td><td>${pctDe(totResumen.kcal, metaMacro.kcal)}</td><td>${pctDe(totResumen.carb, metaMacro.carb)}</td><td>${pctDe(totResumen.prot, metaMacro.prot)}</td><td>${pctDe(totResumen.lip, metaMacro.lip)}</td></tr>
-            <tr class="falta"><td>Te faltan</td><td>${faltaDe(totResumen.kcal, metaMacro.kcal, true)}</td><td>${faltaDe(totResumen.carb, metaMacro.carb)}</td><td>${faltaDe(totResumen.prot, metaMacro.prot)}</td><td>${faltaDe(totResumen.lip, metaMacro.lip)}</td></tr>
+            <tr><td>Tu meta</td>${celdas4(kcalTxt(metaMacro.kcal), fmtMacro(metaMacro.carb), fmtMacro(metaMacro.prot), fmtMacro(metaMacro.lip))}</tr>
+            <tr><td>% de tu meta</td>${celdas4(pctDe(totResumen.kcal, metaMacro.kcal), pctDe(totResumen.carb, metaMacro.carb), pctDe(totResumen.prot, metaMacro.prot), pctDe(totResumen.lip, metaMacro.lip))}</tr>
+            <tr class="falta"><td>Te faltan</td>${celdas4(faltaDe(totResumen.kcal, metaMacro.kcal, true), faltaDe(totResumen.carb, metaMacro.carb), faltaDe(totResumen.prot, metaMacro.prot), faltaDe(totResumen.lip, metaMacro.lip))}</tr>
           </tfoot>
         </table></div>
         <p class="exercise-hint" style="margin-top:8px">Un <span class="pasa">+número</span> es lo que te pasaste de la meta.</p>
@@ -1764,9 +1892,16 @@ function renderNutricion() {
     </div>`;
 
   c.innerHTML = `
-    <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <h2 style="margin:0">📅 Día que estás registrando</h2>
-      <input id="nu_fecha" type="date" value="${esc(nutricionFecha)}" style="width:auto;margin:0">
+    <div class="card nutri-dia-card">
+      <button type="button" class="nutri-dia-mov" data-nutri-mov="-1" aria-label="Día anterior">‹</button>
+      <div class="nutri-dia-centro">
+        <div class="nutri-dia-nombre">
+          <span>${esc(nombreDiaLargo(nutricionFecha))}</span>
+          ${nutricionFecha === hoyISO() ? `<span class="mpill hoy">Hoy</span>` : `<button type="button" class="btn tiny ghost" data-nutri-mov="hoy">Ir a hoy</button>`}
+        </div>
+        <input id="nu_fecha" type="date" value="${esc(nutricionFecha)}" aria-label="Elegir otro día">
+      </div>
+      <button type="button" class="nutri-dia-mov" data-nutri-mov="1" aria-label="Día siguiente">›</button>
     </div>
 
     <div class="nutri-subtabs">
@@ -1819,15 +1954,10 @@ function renderNutricion() {
     <div class="card nutri-acc ${abre("conteo") ? "abierta" : ""}">
       ${accHead("conteo", "🔢 Mi conteo del día", resumenConteo)}
       <div class="nutri-acc-body">
-      <p class="exercise-hint">Aquí se junta todo: la app cuenta calorías, carbohidratos, proteínas y lípidos y los
-      compara con tus metas de arriba, para que veas cuánto llevas y cuánto te falta. <b>Lo que elijas en "Comidas
-      del día" (y el scoop de proteína) se suma solo</b>, con la porción de tu plan. Para algo extra o de otra
-      cantidad, elígelo aquí abajo (escribe los gramos <b>antes</b> si no es la porción del plan; o corrígelos
-      después con ✏️). Si no está en la lista, elige "+ Otro alimento" y te pido sus valores.</p>
-      ${barraMacroHtml("Calorías", "kcal", totMacro.kcal, metaMacro.kcal, false)}
-      ${barraMacroHtml("Carbohidratos", "g", totMacro.carb, metaMacro.carb, false)}
-      ${barraMacroHtml("Proteínas", "g", totMacro.prot, metaMacro.prot, true)}
-      ${barraMacroHtml("Lípidos", "g", totMacro.lip, metaMacro.lip, false)}
+      ${heroHtml}
+      ${barraMacroHtml("Carbohidratos", "g", totMacro.carb, metaMacro.carb, false, "carb")}
+      ${barraMacroHtml("Proteínas", "g", totMacro.prot, metaMacro.prot, true, "prot")}
+      ${barraMacroHtml("Lípidos", "g", totMacro.lip, metaMacro.lip, false, "lip")}
       <div class="nutri-item-add" style="margin-top:12px">
         <div style="flex:1;min-width:110px"><label>Gramos (opcional)</label>
           <input id="nu_mac_gramos" type="number" min="1" step="1" inputmode="decimal" placeholder="porción del plan" style="margin:0">
@@ -1845,7 +1975,8 @@ function renderNutricion() {
           <div class="nutri-item">
             <div>
               <div class="exercise-name">🍽️ Lo que elegiste en "Comidas del día" — ${pm.contados} alimento${pm.contados > 1 ? "s" : ""}</div>
-              <div class="exercise-meta">${Math.round(pm.tot.kcal)} kcal · C ${fmtMacro(pm.tot.carb)} g · P ${fmtMacro(pm.tot.prot)} g · L ${fmtMacro(pm.tot.lip)} g<br>Con la porción de tu plan; para cambiarlo, quítalo o reemplázalo allá (🔄 / 🗑️).</div>
+              <div class="exercise-meta">${pillsMacro(pm.tot.kcal, pm.tot.carb, pm.tot.prot, pm.tot.lip)}</div>
+              <div class="nutri-nota">Con la porción de tu plan; para cambiarlo, quítalo o reemplázalo allá (🔄 / 🗑️).</div>
             </div>
           </div>` : ""}
         ${pm.sinValores.length ? `<p class="exercise-hint">⚠️ No suman porque no tengo sus valores: ${esc(pm.sinValores.join("; "))}. Anótalos aquí con "+ Otro alimento" para que cuenten.</p>` : ""}
@@ -1853,21 +1984,23 @@ function renderNutricion() {
           <div class="nutri-item">
             <div>
               <div class="exercise-name">🍫 Barra de proteína Wild Protein — ${nBarras} unidad${nBarras > 1 ? "es" : ""} (45 g)</div>
-              <div class="exercise-meta">${Math.round(nBarras * barraV.kcal)} kcal · C ${fmtMacro(nBarras * barraV.carb)} g · P ${fmtMacro(nBarras * barraV.prot)} g · L ${fmtMacro(nBarras * barraV.lip)} g<br>Viene de tu colación; para quitarla, desmárcala en "Comidas del día".</div>
+              <div class="exercise-meta">${pillsMacro(nBarras * barraV.kcal, nBarras * barraV.carb, nBarras * barraV.prot, nBarras * barraV.lip)}</div>
+              <div class="nutri-nota">Viene de tu colación; para quitarla, desmárcala en "Comidas del día".</div>
             </div>
           </div>` : ""}
         ${nScoops ? `
           <div class="nutri-item">
             <div>
               <div class="exercise-name">💪 Proteína en polvo — ${nScoops} scoop${nScoops > 1 ? "s" : ""}</div>
-              <div class="exercise-meta">${Math.round(nScoops * scoopV.kcal)} kcal · C ${fmtMacro(nScoops * scoopV.carb)} g · P ${fmtMacro(nScoops * scoopV.prot)} g · L ${fmtMacro(nScoops * scoopV.lip)} g<br>Viene de tu colación; para quitarlo, desmárcalo en "Comidas del día".</div>
+              <div class="exercise-meta">${pillsMacro(nScoops * scoopV.kcal, nScoops * scoopV.carb, nScoops * scoopV.prot, nScoops * scoopV.lip)}</div>
+              <div class="nutri-nota">Viene de tu colación; para quitarlo, desmárcalo en "Comidas del día".</div>
             </div>
           </div>` : ""}
         ${entradasMacro.length ? entradasMacro.map((e) => `
           <div class="nutri-item">
             <div>
               <div class="exercise-name">${esc(e.nombre)} — ${fmtMacro(e.gramos)} g</div>
-              <div class="exercise-meta">${Math.round(e.kcal)} kcal · C ${fmtMacro(e.carb)} g · P ${fmtMacro(e.prot)} g · L ${fmtMacro(e.lip)} g</div>
+              <div class="exercise-meta">${pillsMacro(e.kcal, e.carb, e.prot, e.lip)}</div>
             </div>
             <span>
               <button class="icon-btn" data-edit-macro="${e.id}" title="Cambiar los gramos">✏️</button>
@@ -1876,6 +2009,10 @@ function renderNutricion() {
           </div>`).join("") : ((nScoops || nBarras || pm.contados || pm.sinValores.length) ? "" : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`)}
       </div>
       ${entradasMacro.length ? `<button class="btn ghost small" id="nu_mac_vaciar">🗑️ Vaciar el conteo de este día</button>` : ""}
+      <p class="exercise-hint" style="margin-top:14px">Aquí se junta todo: <b>lo que elijas en "Comidas del día" (y el
+      scoop, la barra y la leche) se suma solo</b>, con la porción de tu plan. Para algo extra o de otra cantidad,
+      elígelo arriba (escribe los gramos <b>antes</b> si no es la porción del plan; o corrígelos después con ✏️). Si
+      no está en la lista, elige "+ Otro alimento" y te pido sus valores.</p>
       </div>
     </div>
 
@@ -1978,6 +2115,14 @@ function renderNutricion() {
     renderNutricion();
   });
 
+  c.querySelectorAll("[data-nutri-mov]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const mov = b.dataset.nutriMov;
+      nutricionFecha = mov === "hoy" ? hoyISO() : fechaISOMenosDias(nutricionFecha, -parseInt(mov, 10));
+      nutriComidaAbierta = undefined;
+      renderNutricion();
+    });
+  });
   c.querySelectorAll("[data-nutri-vista]").forEach((b) => {
     b.addEventListener("click", () => {
       if (nutriVista === b.dataset.nutriVista) return;
