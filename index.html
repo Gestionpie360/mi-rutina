@@ -1440,12 +1440,11 @@ function renderNutricion() {
         </div>
       </div>
       <div class="nutri-item-add">
-        <div><select data-porcion-select="${comidaIdx}:${grupoId}">
-          <option value="">Elegir ${grupo.nombre.toLowerCase()}…</option>
+        <div><select data-porcion-select="${comidaIdx}:${grupoId}" data-cantidad="${cantidadPorClick}">
+          <option value="">➕ Elegir ${grupo.nombre.toLowerCase()}…</option>
           ${opciones.map((o) => `<option value="${esc(o)}">${esc(o)}</option>`).join("")}
           <option value="__nuevo">+ Agregar otro…</option>
         </select></div>
-        <div><button class="btn small" data-add-porcion="${comidaIdx}:${grupoId}:${cantidadPorClick}">+ Agregar</button></div>
       </div>
     `;
   }
@@ -1773,17 +1772,17 @@ function renderNutricion() {
       toast("🔄 Alimento reemplazado");
     });
   });
-  c.querySelectorAll("[data-add-porcion]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const [comidaIdx, grupoId, cantidadStr] = btn.dataset.addPorcion.split(":");
-      const cantidad = parseFloat(cantidadStr);
-      const select = c.querySelector(`[data-porcion-select="${comidaIdx}:${grupoId}"]`);
-      if (!select.value) { toast("⚠️ Elige un alimento"); return; }
+  // Al elegir un alimento en el desplegable se suma de inmediato (sin botón aparte).
+  c.querySelectorAll("[data-porcion-select]").forEach((select) => {
+    select.addEventListener("change", async () => {
+      if (!select.value) return;
+      const [comidaIdx, grupoId] = select.dataset.porcionSelect.split(":");
+      const cantidad = parseFloat(select.dataset.cantidad);
       let nombreAlimento = select.value;
       if (select.value === "__nuevo") {
         const grupo = GRUPOS_NUTRICION.find((g) => g.id === grupoId);
         const nuevo = await modalAlimentoNuevo(grupo.nombre);
-        if (!nuevo) return;
+        if (!nuevo) { select.value = ""; return; }
         if (!alimentosCustom[grupoId]) alimentosCustom[grupoId] = [];
         alimentosCustom[grupoId].push({ id: "c_" + Math.random().toString(36).slice(2), nombre: nuevo });
         persistAlimentosCustom();
