@@ -477,6 +477,35 @@ textarea { resize: vertical; min-height: 60px; }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bn-btn.active { box-shadow: inset 0 2px 0 var(--accent); }
 h2 { letter-spacing: -.01em; }
+.nutri-resumen-cab { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.nutri-resumen-cab h2 { margin: 0; }
+.print-only { display: none; }
+.nutri-print-cab { justify-content: space-between; align-items: baseline; border-bottom: 2px solid #111; padding-bottom: 6px; margin-bottom: 12px; font-size: 1.2rem; }
+.nutri-print-cab span { font-size: .95rem; text-transform: capitalize; }
+/* Imprimir / guardar PDF del resumen: solo la tabla, en colores claros aunque el teléfono esté en modo oscuro */
+@media print {
+  :root {
+    --bg: #fff; --bg-elev: #fff; --text: #111; --text-dim: #444; --border: #bbb; --accent: #1d4ed8;
+    --danger: #b91c1c; --ok: #15803d;
+    --m-kcal: #1d4ed8; --m-carb: #c2410c; --m-prot: #be185d; --m-lip: #6d28d9;
+  }
+  html, body { background: #fff !important; color: #111 !important; }
+  body.imprime-resumen { padding: 0 !important; }
+  body.imprime-resumen .topbar, body.imprime-resumen .bottomnav, body.imprime-resumen .mic-cluster,
+  body.imprime-resumen .timer-fab, body.imprime-resumen .timer-widget, body.imprime-resumen .toast,
+  body.imprime-resumen .nutri-dia-card, body.imprime-resumen .nutri-subtabs, body.imprime-resumen #nutriRegistro,
+  body.imprime-resumen .no-print, body.imprime-resumen .modal-overlay { display: none !important; }
+  body.imprime-resumen .view:not(#view-nutricion) { display: none !important; }
+  body.imprime-resumen #app { max-width: none; padding: 0; }
+  body.imprime-resumen .card { box-shadow: none; border: none; padding: 0; }
+  body.imprime-resumen .print-only { display: flex !important; }
+  body.imprime-resumen .nutri-resumen-wrap { overflow: visible; }
+  body.imprime-resumen .nutri-resumen { font-size: 11pt; }
+  body.imprime-resumen .nutri-resumen, body.imprime-resumen .nutri-resumen * {
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  body.imprime-resumen .nutri-resumen tr { break-inside: avoid; }
+}
 /* Acordeones de Nutrición */
 .nutri-acc-head {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px;
@@ -1464,7 +1493,7 @@ function modalBase(titleHtml, bodyHtml, buttons) {
     const actions = overlay.querySelector(".modal-actions");
     buttons.forEach((b) => {
       const btn = document.createElement("button");
-      btn.className = "btn" + (b.ghost ? " ghost" : "") + (b.danger ? " danger" : "");
+      btn.className = "btn" + (b.ghost ? " ghost" : "") + (b.danger ? " danger" : "") + (b.block ? " block" : "");
       btn.textContent = b.label;
       btn.addEventListener("click", () => finish(b.getValue ? b.getValue(overlay) : b.value));
       actions.appendChild(btn);
@@ -1544,7 +1573,9 @@ function volumenEjercicio(seriesLog) {
    Navegación por pestañas
 --------------------------------------------------------------- */
 const TABS = ["entrenar", "rutina", "historial", "perfil", "nutricion", "datos"];
+let tabActual = "entrenar";
 function showTab(tab) {
+  tabActual = tab;
   TABS.forEach((t) => {
     document.getElementById("view-" + t).hidden = t !== tab;
   });
@@ -1880,6 +1911,7 @@ function renderNutricion() {
   const totResumen = { kcal: 0, carb: 0, prot: 0, lip: 0 };
   const cuerpoResumen = seccionesResumen.map((s) => {
     const sub = sumaFilas(s.filas);
+    s.sub = sub;
     totResumen.kcal += sub.kcal; totResumen.carb += sub.carb; totResumen.prot += sub.prot; totResumen.lip += sub.lip;
     return `<tr class="sec"><th colspan="5">${s.icono ? s.icono + " " : ""}${esc(s.titulo)}</th></tr>` +
       s.filas.map((f) => (f.sin
@@ -1896,7 +1928,11 @@ function renderNutricion() {
   };
   const resumenHtml = `
     <div class="card">
-      <h2>📋 Qué aportó cada alimento</h2>
+      <div class="print-only nutri-print-cab"><b>Resumen nutricional</b><span>${esc(nombreDiaLargo(nutricionFecha))}</span></div>
+      <div class="nutri-resumen-cab">
+        <h2>📋 Qué aportó cada alimento</h2>
+        <button type="button" class="btn small no-print" id="nu_exportar">📤 Exportar</button>
+      </div>
       <p class="exercise-hint">Todo lo que anotaste este día (de "Comidas del día", el scoop y lo anotado aparte) con lo que
       aporta cada alimento a cada conteo. <b>C</b> = carbohidratos, <b>P</b> = proteínas, <b>L</b> = lípidos (en gramos).</p>
       ${seccionesResumen.length ? `
@@ -2110,6 +2146,79 @@ function renderNutricion() {
     </div>
     </div>
   `;
+
+  // --- Exportar el resumen del día: texto (compartir/copiar), CSV para Excel o PDF (imprimir) ---
+  document.getElementById("nu_exportar").addEventListener("click", async () => {
+    if (!seccionesResumen.length) { toast("⚠️ Aún no hay nada anotado este día para exportar"); return; }
+    const num = (x) => (Math.round((Number(x) || 0) * 10) / 10).toString().replace(".", ",");
+    const fechaLarga = nombreDiaLargo(nutricionFecha);
+    const faltan = {
+      kcal: metaMacro.kcal - totResumen.kcal, carb: metaMacro.carb - totResumen.carb,
+      prot: metaMacro.prot - totResumen.prot, lip: metaMacro.lip - totResumen.lip,
+    };
+    const lineaMacros = (o) => `${Math.round(o.kcal)} kcal · C ${num(o.carb)} g · P ${num(o.prot)} g · L ${num(o.lip)} g`;
+    const armarTexto = () => {
+      const L = [`📋 Resumen nutricional — ${fechaLarga}`];
+      seccionesResumen.forEach((s) => {
+        L.push("", `${s.icono || "🍴"} ${s.titulo}`);
+        s.filas.forEach((f) => {
+          L.push(f.sin ? `• ${f.nombre}: sin valores (no suma)`
+            : `• ${f.nombre}: ${Math.round(f.kcal)} kcal | C ${num(f.carb)} | P ${num(f.prot)} | L ${num(f.lip)}`);
+        });
+        if (s.filas.length > 1) L.push(`  Subtotal: ${lineaMacros(s.sub)}`);
+      });
+      const f1 = (v, m) => (m > 0 ? (v >= 0 ? num(v) : `+${num(-v)} (te pasaste)`) : "–");
+      L.push("", "TOTAL DEL DÍA", lineaMacros(totResumen),
+        `Meta: ${Math.round(metaMacro.kcal)} kcal · C ${num(metaMacro.carb)} g · P ${num(metaMacro.prot)} g · L ${num(metaMacro.lip)} g`,
+        `Te faltan: ${f1(faltan.kcal, metaMacro.kcal)} kcal · C ${f1(faltan.carb, metaMacro.carb)} g · P ${f1(faltan.prot, metaMacro.prot)} g · L ${f1(faltan.lip, metaMacro.lip)} g`);
+      return L.join("\n");
+    };
+    const armarCsv = () => {
+      const esc2 = (t) => { const s = String(t); return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+      const fila = (a) => a.map(esc2).join(";");
+      const F = fmtFecha(nutricionFecha);
+      const R = [fila(["Fecha", "Comida", "Alimento", "Gramos", "Calorías (kcal)", "Carbohidratos (g)", "Proteínas (g)", "Lípidos (g)"])];
+      seccionesResumen.forEach((s) => {
+        s.filas.forEach((f) => R.push(fila(f.sin
+          ? [F, s.titulo, f.nombre + " (sin valores)", "", "", "", "", ""]
+          : [F, s.titulo, f.nombre, f.g ? num(f.g) : "", num(f.kcal), num(f.carb), num(f.prot), num(f.lip)])));
+      });
+      R.push(fila([F, "TOTAL DEL DÍA", "", "", num(totResumen.kcal), num(totResumen.carb), num(totResumen.prot), num(totResumen.lip)]));
+      R.push(fila([F, "META", "", "", num(metaMacro.kcal), num(metaMacro.carb), num(metaMacro.prot), num(metaMacro.lip)]));
+      R.push(fila([F, "TE FALTAN (negativo = te pasaste)", "", "", num(faltan.kcal), num(faltan.carb), num(faltan.prot), num(faltan.lip)]));
+      return "﻿" + R.join("\r\n");
+    };
+    const opciones = [];
+    if (navigator.share) opciones.push({ label: "📤 Compartir (WhatsApp, correo…)", value: "compartir", block: true });
+    opciones.push({ label: "📋 Copiar como texto", value: "copiar", block: true });
+    opciones.push({ label: "📊 Descargar para Excel (CSV)", value: "csv", block: true });
+    opciones.push({ label: "🖨️ Imprimir o guardar como PDF", value: "pdf", block: true });
+    opciones.push({ label: "Cancelar", ghost: true, value: null, block: true });
+    const eleccion = await modalBase("Exportar resumen del día", `<p>${esc(fechaLarga)} — elige cómo llevártelo:</p>`, opciones);
+    if (!eleccion) return;
+    if (eleccion === "compartir") {
+      try { await navigator.share({ title: `Resumen nutricional ${fmtFecha(nutricionFecha)}`, text: armarTexto() }); }
+      catch (err) { if (err && err.name !== "AbortError") toast("⚠️ No se pudo compartir; prueba con \"Copiar como texto\""); }
+    } else if (eleccion === "copiar") {
+      const texto = armarTexto();
+      try { await navigator.clipboard.writeText(texto); toast("📋 Resumen copiado"); }
+      catch (err) {
+        await modalBase("Copia el resumen", `<textarea id="exTexto" rows="12" style="font-size:.8rem">${esc(texto)}</textarea>`, [{ label: "Cerrar", value: true }]);
+      }
+    } else if (eleccion === "csv") {
+      const blob = new Blob([armarCsv()], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `resumen-nutricion-${nutricionFecha}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+      toast("📊 Archivo descargado");
+    } else if (eleccion === "pdf") {
+      document.body.classList.add("imprime-resumen");
+      window.addEventListener("afterprint", () => document.body.classList.remove("imprime-resumen"), { once: true });
+      window.print();
+    }
+  });
 
   document.getElementById("nu_guardar").addEventListener("click", () => {
     const metasPorciones = {};
@@ -3725,9 +3834,72 @@ if (SpeechRecognitionCtor) {
 })();
 
 /* ---------------------------------------------------------------
-   Arranque
+   Arranque — al recargar la página se vuelve a la misma pantalla en la que estabas
+   (pestaña, sección abierta, día, posición) y se recupera la sesión de entrenamiento
+   en curso, que antes solo vivía en memoria y se perdía al recargar.
 --------------------------------------------------------------- */
-showTab("entrenar");
+const LS_UI = "rutina_ui_estado_v1";
+const LS_SESION = "rutina_sesion_activa_v1";
+const SESION_MAX_MS = 12 * 60 * 60 * 1000; // una sesión sin terminar más vieja que esto se descarta
+
+function guardarEstado() {
+  try {
+    const ui = JSON.stringify({
+      tab: tabActual, nutriVista, nutriSeccion, nutriComidaAbierta, nutriDiaMenu, nutricionSemana, nutricionPeriodo,
+      fecha: nutricionFecha, hoy: hoyISO(), scrollY: Math.round(window.scrollY || 0),
+    });
+    if (ui !== guardarEstado._ui) { localStorage.setItem(LS_UI, ui); guardarEstado._ui = ui; }
+    const ses = entrenoActual ? JSON.stringify({ entrenoActual, bloqueActivoKey }) : null;
+    if (ses !== guardarEstado._ses) {
+      if (ses) localStorage.setItem(LS_SESION, ses); else localStorage.removeItem(LS_SESION);
+      guardarEstado._ses = ses;
+    }
+  } catch (e) { /* sin espacio o almacenamiento bloqueado: la app sigue funcionando igual */ }
+}
+
+(function restaurarEstado() {
+  if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+  const ses = loadJSON(LS_SESION, null);
+  if (ses && ses.entrenoActual) {
+    const e = ses.entrenoActual;
+    const rutina = getRoutine(e.routineId);
+    const dia = rutina && getDay(rutina, e.dayId);
+    const vigente = typeof e.startedAt === "number" && Date.now() - e.startedAt < SESION_MAX_MS;
+    if (dia && vigente && e.log && typeof e.log === "object") {
+      // se alinea con la rutina actual por si se editó mientras tanto
+      dia.ejercicios.forEach((ex) => {
+        const previo = Array.isArray(e.log[ex.id]) ? e.log[ex.id] : [];
+        e.log[ex.id] = ex.series.map((_, i) => previo[i] || { reps: "", kg: "" });
+      });
+      entrenoActual = e;
+      bloqueActivoKey = ses.bloqueActivoKey || null;
+    } else {
+      localStorage.removeItem(LS_SESION);
+    }
+  }
+
+  const ui = loadJSON(LS_UI, null);
+  let tab = "entrenar";
+  if (ui && TABS.includes(ui.tab)) {
+    tab = ui.tab;
+    if (ui.nutriVista === "registro" || ui.nutriVista === "resumen") nutriVista = ui.nutriVista;
+    if (ui.nutriSeccion === null || typeof ui.nutriSeccion === "string") nutriSeccion = ui.nutriSeccion;
+    if (typeof ui.nutriComidaAbierta === "number") nutriComidaAbierta = ui.nutriComidaAbierta;
+    if (typeof ui.nutriDiaMenu === "number") nutriDiaMenu = ui.nutriDiaMenu;
+    if ([1, 2, 3, 4].includes(ui.nutricionSemana)) nutricionSemana = ui.nutricionSemana;
+    if ([7, 14, 30].includes(ui.nutricionPeriodo)) nutricionPeriodo = ui.nutricionPeriodo;
+    // el día solo se recuerda si es el mismo día calendario: al día siguiente se parte en "hoy"
+    if (ui.hoy === hoyISO() && /^\d{4}-\d{2}-\d{2}$/.test(ui.fecha || "")) nutricionFecha = ui.fecha;
+  }
+  showTab(tab);
+  if (ui && TABS.includes(ui.tab) && ui.scrollY > 0) {
+    requestAnimationFrame(() => window.scrollTo(0, ui.scrollY));
+  }
+  guardarEstado();
+})();
+setInterval(guardarEstado, 1500);
+window.addEventListener("pagehide", guardarEstado);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") guardarEstado(); });
 
 })();
 </script>
