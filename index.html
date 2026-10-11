@@ -412,6 +412,30 @@ textarea { resize: vertical; min-height: 60px; }
   padding: 8px 10px; font-size: .82rem; margin-bottom: 10px;
 }
 .nutri-plato-idea b { color: var(--accent); }
+/* Pestañas internas de Nutrición (Registro / Resumen) */
+.nutri-subtabs {
+  display: flex; gap: 6px; margin-bottom: 14px; padding: 4px; scroll-margin-top: 64px;
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 12px;
+}
+.nutri-subtab {
+  flex: 1; border: none; background: transparent; color: var(--text-dim); cursor: pointer;
+  padding: 10px 8px; border-radius: 9px; font: inherit; font-weight: 700; font-size: .92rem;
+}
+.nutri-subtab.activa { background: var(--accent); color: var(--accent-text); }
+.nutri-resumen { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.nutri-resumen th, .nutri-resumen td {
+  padding: 6px 4px; text-align: right; border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums; vertical-align: top;
+}
+.nutri-resumen th:first-child, .nutri-resumen td:first-child { text-align: left; }
+.nutri-resumen thead th { color: var(--text-dim); font-size: .7rem; text-transform: uppercase; }
+.nutri-resumen tr.sec th { text-align: left; background: var(--bg); font-size: .82rem; padding: 8px 6px; }
+.nutri-resumen tr.sub td { font-weight: 700; color: var(--text-dim); }
+.nutri-resumen td small { color: var(--text-dim); }
+.nutri-resumen td.sin { text-align: left; color: var(--warn); font-size: .74rem; }
+.nutri-resumen tfoot td { font-weight: 700; }
+.nutri-resumen tfoot tr.tot td { border-top: 2px solid var(--accent); }
+.nutri-resumen .pasa, .pasa { color: var(--warn); }
 /* Acordeones de Nutrición */
 .nutri-acc-head {
   display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px;
@@ -1235,6 +1259,7 @@ let nutriSeccion = "conteo"; // null = todas cerradas
 let nutriComidaAbierta; // índice; undefined = se decide al dibujar (la primera incompleta); -1 = ninguna
 let nutriDiaMenu; // 0 = lunes; undefined = el día de hoy; -1 = ninguno
 let nutriScrollA = null; // selector al que llevar la vista tras dibujar
+let nutriVista = "registro"; // pestaña interna de Nutrición: "registro" | "resumen"
 let routines = loadJSON(LS.routines, null);
 if (!routines || !routines.length) {
   routines = [rutinaOriginalPorDefecto()];
@@ -1645,12 +1670,78 @@ function renderNutricion() {
     `;
   }
 
+  // --- Pestaña Resumen: qué aportó cada alimento a cada conteo (calorías, C, P, L) ---
+  const seccionesResumen = [];
+  comidas.forEach((cm) => {
+    const filas = cm.porciones.map((p) => {
+      const m = macroDePorcion(p.grupo, p.alimento);
+      return m ? { nombre: p.alimento, g: m.g, kcal: m.kcal, carb: m.carb, prot: m.prot, lip: m.lip } : { nombre: p.alimento, sin: true };
+    });
+    if (cm.proteinaPolvo) filas.push({ nombre: "💪 Proteína en polvo (1 scoop)", kcal: scoopV.kcal, carb: scoopV.carb, prot: scoopV.prot, lip: scoopV.lip });
+    if (cm.productoColacion) filas.push({ nombre: cm.productoColacion, sin: true });
+    if (filas.length) seccionesResumen.push({ titulo: cm.nombre, filas });
+  });
+  if (entradasMacro.length) {
+    seccionesResumen.push({
+      titulo: "Anotado aparte en el conteo",
+      filas: entradasMacro.map((e) => ({ nombre: e.nombre, g: e.gramos, kcal: e.kcal, carb: e.carb, prot: e.prot, lip: e.lip })),
+    });
+  }
+  const sumaFilas = (filas) => filas.reduce((a, f) => (f.sin ? a : {
+    kcal: a.kcal + f.kcal, carb: a.carb + f.carb, prot: a.prot + f.prot, lip: a.lip + f.lip,
+  }), { kcal: 0, carb: 0, prot: 0, lip: 0 });
+  const celdasMacro = (o) => `<td>${kcalTxt(o.kcal)}</td><td>${fmtMacro(o.carb)}</td><td>${fmtMacro(o.prot)}</td><td>${fmtMacro(o.lip)}</td>`;
+  const totResumen = { kcal: 0, carb: 0, prot: 0, lip: 0 };
+  const cuerpoResumen = seccionesResumen.map((s) => {
+    const sub = sumaFilas(s.filas);
+    totResumen.kcal += sub.kcal; totResumen.carb += sub.carb; totResumen.prot += sub.prot; totResumen.lip += sub.lip;
+    return `<tr class="sec"><th colspan="5">${esc(s.titulo)}</th></tr>` +
+      s.filas.map((f) => (f.sin
+        ? `<tr><td>${esc(f.nombre)}</td><td colspan="4" class="sin">no suma: sin valores</td></tr>`
+        : `<tr><td>${esc(f.nombre)}${f.g && !/\(\s*\d+(?:[.,]\d+)?\s*g\)/.test(f.nombre) ? `<br><small>${fmtMacro(f.g)} g</small>` : ""}</td>${celdasMacro(f)}</tr>`)).join("") +
+      (s.filas.length > 1 ? `<tr class="sub"><td>Subtotal</td>${celdasMacro(sub)}</tr>` : "");
+  }).join("");
+  const pctDe = (v, m) => (m > 0 ? Math.round((v / m) * 100) + "%" : "–");
+  const faltaDe = (v, m, kcal) => {
+    if (!(m > 0)) return "–";
+    const d = m - v;
+    const f = (x) => (kcal ? kcalTxt(x) : fmtMacro(x));
+    return d >= -0.5 ? f(Math.max(0, d)) : `<span class="pasa">+${f(-d)}</span>`;
+  };
+  const resumenHtml = `
+    <div class="card">
+      <h2>📋 Qué aportó cada alimento — ${esc(fmtFecha(nutricionFecha))}</h2>
+      <p class="exercise-hint">Todo lo que anotaste este día (de "Comidas del día", el scoop y lo anotado aparte) con lo que
+      aporta cada alimento a cada conteo. <b>C</b> = carbohidratos, <b>P</b> = proteínas, <b>L</b> = lípidos (en gramos).</p>
+      ${seccionesResumen.length ? `
+        <div class="table-scroll"><table class="nutri-resumen">
+          <thead><tr><th>Alimento</th><th>kcal</th><th>C</th><th>P</th><th>L</th></tr></thead>
+          <tbody>${cuerpoResumen}</tbody>
+          <tfoot>
+            <tr class="tot"><td>Total del día</td>${celdasMacro(totResumen)}</tr>
+            <tr><td>Tu meta</td><td>${kcalTxt(metaMacro.kcal)}</td><td>${fmtMacro(metaMacro.carb)}</td><td>${fmtMacro(metaMacro.prot)}</td><td>${fmtMacro(metaMacro.lip)}</td></tr>
+            <tr><td>% de tu meta</td><td>${pctDe(totResumen.kcal, metaMacro.kcal)}</td><td>${pctDe(totResumen.carb, metaMacro.carb)}</td><td>${pctDe(totResumen.prot, metaMacro.prot)}</td><td>${pctDe(totResumen.lip, metaMacro.lip)}</td></tr>
+            <tr class="falta"><td>Te faltan</td><td>${faltaDe(totResumen.kcal, metaMacro.kcal, true)}</td><td>${faltaDe(totResumen.carb, metaMacro.carb)}</td><td>${faltaDe(totResumen.prot, metaMacro.prot)}</td><td>${faltaDe(totResumen.lip, metaMacro.lip)}</td></tr>
+          </tfoot>
+        </table></div>
+        <p class="exercise-hint" style="margin-top:8px">Un <span class="pasa">+número</span> es lo que te pasaste de la meta.</p>
+      ` : `<p class="exercise-hint">Aún no has anotado nada este día.</p>`}
+    </div>`;
+
   c.innerHTML = `
     <div class="card" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <h2 style="margin:0">📅 Día que estás registrando</h2>
       <input id="nu_fecha" type="date" value="${esc(nutricionFecha)}" style="width:auto;margin:0">
     </div>
 
+    <div class="nutri-subtabs">
+      <button type="button" class="nutri-subtab ${nutriVista === "registro" ? "activa" : ""}" data-nutri-vista="registro">✍️ Registro</button>
+      <button type="button" class="nutri-subtab ${nutriVista === "resumen" ? "activa" : ""}" data-nutri-vista="resumen">📋 Resumen</button>
+    </div>
+
+    <div id="nutriResumen" ${nutriVista === "resumen" ? "" : "hidden"}>${resumenHtml}</div>
+
+    <div id="nutriRegistro" ${nutriVista === "registro" ? "" : "hidden"}>
     <div class="card nutri-acc ${abre("metas") ? "abierta" : ""}">
       ${accHead("metas", "🎯 Mis metas (según mi plan)", resumenMetas)}
       <div class="nutri-acc-body">
@@ -1815,6 +1906,7 @@ function renderNutricion() {
       }).join("")}
       </div>
     </div>
+    </div>
   `;
 
   document.getElementById("nu_guardar").addEventListener("click", () => {
@@ -1842,6 +1934,15 @@ function renderNutricion() {
   document.getElementById("nu_semana").addEventListener("change", (e) => {
     nutricionSemana = parseInt(e.target.value, 10);
     renderNutricion();
+  });
+
+  c.querySelectorAll("[data-nutri-vista]").forEach((b) => {
+    b.addEventListener("click", () => {
+      if (nutriVista === b.dataset.nutriVista) return;
+      nutriVista = b.dataset.nutriVista;
+      nutriScrollA = ".nutri-subtabs";
+      renderNutricion();
+    });
   });
 
   // --- Acordeones: una sección abierta a la vez; dentro, una comida y un día del menú ---
