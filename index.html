@@ -800,8 +800,6 @@ function rutinaOriginalPorDefecto() {
           ej("2.2", "Adductores en máquina", "", "https://www.youtube.com/watch?v=fItDiXXZyZo"),
           ej("3.1", "Peso muerto rumano", "12-15 reps", "https://www.youtube.com/watch?v=UgqrPwoTick"),
           ej("4.1", "Silla de cuádriceps", "12-15 reps", "https://www.youtube.com/watch?v=GMFFZnDz6wE"),
-          ej("4.2", "Silla de isquiotibiales", "", "https://www.youtube.com/watch?v=kU6YEyUzPcA"),
-          ej("5.1", "Gastrocnemio en Hack", "", "https://www.youtube.com/watch?v=6LGmIoadgq8"),
           ej("5.2", "Press Pallof", "15/15 (por lado)", "https://www.youtube.com/watch?v=W8Yf1uyUnoM"),
         ],
       },
@@ -1463,12 +1461,34 @@ function aplicarObjetivosReps(lista) {
   }));
   return cambios;
 }
+// Ejercicios del Día 2 que NO están en la planilla original. Se quitan de las
+// rutinas ya guardadas (por día + grupo + nombre, para no borrar otra cosa).
+// El historial de sesiones no se toca.
+const FUERA_DE_PLANILLA = [
+  { dia: "dia 2", grupo: "4.2", nombre: "isquiotibiales" },
+  { dia: "dia 2", grupo: "5.1", nombre: "gastrocnemio" },
+];
+function quitarFueraDePlanilla(lista) {
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/\p{Mark}/gu, "").trim();
+  let quitados = 0;
+  lista.forEach((r) => (r.dias || []).forEach((d) => {
+    const antes = (d.ejercicios || []).length;
+    d.ejercicios = (d.ejercicios || []).filter((e) =>
+      !FUERA_DE_PLANILLA.some((f) => f.dia === norm(d.nombre) && f.grupo === e.grupo && norm(e.nombre).includes(f.nombre)));
+    quitados += antes - d.ejercicios.length;
+  }));
+  return quitados;
+}
 // Una sola vez por dispositivo (si después borras una indicación a propósito,
-// no vuelve a aparecer).
+// no vuelve a aparecer; si vuelves a agregar un ejercicio, tampoco se quita).
 try {
   if (!localStorage.getItem("rutina_objetivos_reps_v1")) {
     if (aplicarObjetivosReps(routines)) saveJSON(LS.routines, routines);
     localStorage.setItem("rutina_objetivos_reps_v1", "1");
+  }
+  if (!localStorage.getItem("rutina_fuera_planilla_v1")) {
+    if (quitarFueraDePlanilla(routines)) saveJSON(LS.routines, routines);
+    localStorage.setItem("rutina_fuera_planilla_v1", "1");
   }
 } catch (e) { /* sin almacenamiento: queda como estaba */ }
 let sessions = loadJSON(LS.sessions, []);
@@ -3310,7 +3330,7 @@ function importarDatos(e) {
       const ok = await modalConfirm("Importar datos", "Esto reemplazará tus datos actuales en este dispositivo por los del archivo. ¿Continuar?");
       if (!ok) return;
       if (data.profile) profile = data.profile;
-      if (Array.isArray(data.routines) && data.routines.length) { routines = data.routines; aplicarObjetivosReps(routines); }
+      if (Array.isArray(data.routines) && data.routines.length) { routines = data.routines; aplicarObjetivosReps(routines); quitarFueraDePlanilla(routines); }
       if (Array.isArray(data.sessions)) sessions = data.sessions;
       if (data.nutricion) nutricion = data.nutricion;
       if (Array.isArray(data.alimentosCustom)) alimentosCustom = data.alimentosCustom;
