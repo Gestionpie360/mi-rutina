@@ -454,6 +454,25 @@ textarea { resize: vertical; min-height: 60px; }
 .nutri-resumen tfoot td.c-prot { color: var(--m-prot); }
 .nutri-resumen tfoot td.c-lip { color: var(--m-lip); }
 .nutri-resumen tfoot tr.tot td { font-size: .9rem; background: var(--bg); }
+/* Tabla del Resumen: marco, líneas verticales entre columnas y títulos destacados */
+.nutri-resumen-wrap { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.nutri-resumen-wrap.table-scroll { overflow-x: auto; }
+.nutri-resumen { border-collapse: separate; border-spacing: 0; }
+.nutri-resumen th, .nutri-resumen td { border-bottom: 1px solid var(--border); }
+.nutri-resumen tr:last-child > td, .nutri-resumen tr:last-child > th { border-bottom: none; }
+.nutri-resumen th + th, .nutri-resumen td + td { border-left: 1px solid var(--border); }
+.nutri-resumen td, .nutri-resumen thead th { padding-left: 8px; padding-right: 8px; }
+.nutri-resumen thead th { background: var(--bg); font-size: .74rem; letter-spacing: .05em; padding-top: 9px; padding-bottom: 9px; }
+.nutri-resumen tr.sec th {
+  text-align: left; font-size: .92rem; font-weight: 800; padding: 10px 10px;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg-elev));
+  border-left: 4px solid var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+.nutri-resumen tr.sub td { background: color-mix(in srgb, var(--accent) 5%, var(--bg-elev)); color: var(--text); }
+.nutri-resumen tfoot tr.tot td { border-top: 2px solid var(--accent); font-weight: 800; }
+.nutri-resumen tfoot tr:not(.tot) td:first-child { color: var(--text-dim); }
+.nutri-resumen tfoot tr.tot td:first-child { color: var(--text); text-transform: uppercase; letter-spacing: .03em; font-size: .8rem; }
 /* Pulido general */
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .bn-btn.active { box-shadow: inset 0 2px 0 var(--accent); }
@@ -1843,11 +1862,13 @@ function renderNutricion() {
     if (cm.proteinaPolvo) filas.push({ nombre: "💪 Proteína en polvo (1 scoop)", kcal: scoopV.kcal, carb: scoopV.carb, prot: scoopV.prot, lip: scoopV.lip });
     if (cm.barraProteina) filas.push({ nombre: "🍫 Barra Wild Protein (1 unidad, 45 g)", kcal: barraV.kcal, carb: barraV.carb, prot: barraV.prot, lip: barraV.lip });
     if (cm.productoColacion) filas.push({ nombre: cm.productoColacion, sin: true });
-    if (filas.length) seccionesResumen.push({ titulo: cm.nombre, filas });
+    const iconos = { desayuno: "🌅", colacion_manana: "🍎", almuerzo: "🍽️", colacion_tarde: "🥪", once_cena: "🌙" };
+    if (filas.length) seccionesResumen.push({ titulo: cm.nombre, icono: iconos[cm.plantillaId] || "🍴", filas });
   });
   if (entradasMacro.length) {
     seccionesResumen.push({
       titulo: "Anotado aparte en el conteo",
+      icono: "✍️",
       filas: entradasMacro.map((e) => ({ nombre: e.nombre, g: e.gramos, kcal: e.kcal, carb: e.carb, prot: e.prot, lip: e.lip })),
     });
   }
@@ -1860,7 +1881,7 @@ function renderNutricion() {
   const cuerpoResumen = seccionesResumen.map((s) => {
     const sub = sumaFilas(s.filas);
     totResumen.kcal += sub.kcal; totResumen.carb += sub.carb; totResumen.prot += sub.prot; totResumen.lip += sub.lip;
-    return `<tr class="sec"><th colspan="5">${esc(s.titulo)}</th></tr>` +
+    return `<tr class="sec"><th colspan="5">${s.icono ? s.icono + " " : ""}${esc(s.titulo)}</th></tr>` +
       s.filas.map((f) => (f.sin
         ? `<tr><td>${esc(f.nombre)}</td><td colspan="4" class="sin">no suma: sin valores</td></tr>`
         : `<tr><td>${esc(f.nombre)}${f.g && !/\(\s*\d+(?:[.,]\d+)?\s*(?:g|ml|cc)\)/.test(f.nombre) ? `<br><small>${fmtMacro(f.g)} g</small>` : ""}</td>${celdasMacro(f)}</tr>`)).join("") +
@@ -1879,7 +1900,7 @@ function renderNutricion() {
       <p class="exercise-hint">Todo lo que anotaste este día (de "Comidas del día", el scoop y lo anotado aparte) con lo que
       aporta cada alimento a cada conteo. <b>C</b> = carbohidratos, <b>P</b> = proteínas, <b>L</b> = lípidos (en gramos).</p>
       ${seccionesResumen.length ? `
-        <div class="table-scroll"><table class="nutri-resumen">
+        <div class="table-scroll nutri-resumen-wrap"><table class="nutri-resumen">
           <thead><tr><th>Alimento</th><th class="c-kcal">kcal</th><th class="c-carb">C</th><th class="c-prot">P</th><th class="c-lip">L</th></tr></thead>
           <tbody>${cuerpoResumen}</tbody>
           <tfoot>
