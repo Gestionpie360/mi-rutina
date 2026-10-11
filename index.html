@@ -1113,7 +1113,9 @@ const MACRO_ALIMENTOS = [
   ["Aceite (maravilla, canola u oliva)", "1 cucharada", 13, 884, 0, 0, 100],
   // Valores de la etiqueta (por 100 g): 385 kcal · 38,6 g C · 31,2 g P · 11,8 g L; 1 unidad = 45 g.
   ["Barra Wild Protein chocolate naranja", "1 unidad 45 g", 45, 385, 38.6, 31.2, 11.8],
-  ["Proteína en polvo (whey)", "1 scoop", 30, 400, 10, 80, 5],
+  // Etiqueta Prostar 100% Whey Protein banana (Ultimate Nutrition), por 100 g: 400 kcal · 6,7 g hidratos
+  // disponibles · 83,3 g P · 3,3 g grasa total; 1 scoop = 30 g → 120 kcal · 2 g C · 25 g P · 1 g L.
+  ["Proteína en polvo (whey)", "1 scoop", 30, 400, 6.7, 83.3, 3.3],
 ];
 function catalogoMacros() {
   return MACRO_ALIMENTOS.map((a) => ({ nombre: a[0], porcion: a[1], g: a[2], k: a[3], c: a[4], p: a[5], l: a[6] }))
@@ -1225,8 +1227,10 @@ function macrosDePorciones(comidas) {
   });
   return { tot, contados, sinValores: [...new Set(sinValores)] };
 }
-// Valores de 1 scoop de proteína en polvo (30 g de whey típico); editables en "Mis metas" según la etiqueta.
-const SCOOP_DEFECTO = { kcal: 120, carb: 3, prot: 24, lip: 1.5 };
+// Valores de 1 scoop (30 g) de la etiqueta de Prostar 100% Whey banana: 120 kcal · 2 g hidratos disp. ·
+// 25 g proteínas · 1 g grasa total. Editables en "Mis metas" si cambias de producto.
+const SCOOP_DEFECTO = { kcal: 120, carb: 2, prot: 25, lip: 1 };
+const SCOOP_ANTERIOR = { kcal: 120, carb: 3, prot: 24, lip: 1.5 }; // valor genérico de la versión anterior
 function scoopActual() {
   return { ...SCOOP_DEFECTO, ...(nutricion.scoop || {}) };
 }
@@ -1403,7 +1407,13 @@ if (parseFloat(nutricion.calorias) === 1936 && parseFloat(nutricion.carbohidrato
   nutricion.calorias = 1825; nutricion.carbohidratos = 200; nutricion.proteinas = 145; nutricion.lipidos = 54;
   saveJSON(LS.nutricion, nutricion);
 }
-let alimentosCustom = loadJSON(LS.alimentosCustom, {}); // { grupoId: [{id,nombre}] } — alimentos propios agregados por grupo
+// Si el scoop guardado es todavía el valor genérico anterior (nadie lo editó), pasa a los de la etiqueta.
+// Un scoop que el usuario ajustó a mano no se toca.
+if (nutricion.scoop && Object.keys(SCOOP_ANTERIOR).every((k) => parseFloat(nutricion.scoop[k]) === SCOOP_ANTERIOR[k])) {
+  nutricion.scoop = { ...SCOOP_DEFECTO };
+  saveJSON(LS.nutricion, nutricion);
+}
+let alimentosCustom =loadJSON(LS.alimentosCustom, {}); // { grupoId: [{id,nombre}] } — alimentos propios agregados por grupo
 let comidasDias = loadJSON(LS.comidasDias, {});
 let comidasMacros = loadJSON(LS.macrosDias, {}); // { fecha: [entrada] } — conteo de calorías/macros por gramaje
 let alimentosMacroCustom = loadJSON(LS.macroCustom, []); // alimentos propios con sus valores por 100 g
@@ -2091,7 +2101,7 @@ function renderNutricion() {
       </div>
       <label style="margin-top:12px">Mi scoop de proteína en polvo (valores de 1 scoop)</label>
       <p class="exercise-hint" style="margin-top:-8px">Cópialos de la etiqueta de tu proteína. Se suman a tu conteo
-      cada vez que marcas "Proteína en polvo" en la colación (vienen con un scoop típico de 30 g de whey).</p>
+      cada vez que marcas "Proteína en polvo" en la colación (vienen los de la etiqueta de Prostar 100% Whey banana, 30 g por scoop).</p>
       <div class="nutri-macros">
         ${[["kcal", "Calorías (kcal)"], ["carb", "Carbohidratos (g)"], ["prot", "Proteínas (g)"], ["lip", "Lípidos (g)"]].map(([k, t]) => `
           <div class="nutri-macro-chip">
