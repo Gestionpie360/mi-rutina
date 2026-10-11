@@ -472,9 +472,11 @@ h2 { letter-spacing: -.01em; }
 }
 .nutri-acc-sum:empty { display: none; }
 .nutri-acc-sum.ok { color: var(--ok); font-weight: 700; }
-.nutri-acc > .nutri-acc-head { padding: 0; }
+.nutri-acc > .nutri-acc-head { padding: 0; row-gap: 12px; }
+.nutri-acc > .nutri-acc-head .nutri-acc-sum { margin-top: 0; }
+.nutri-comida-toggle { row-gap: 5px; }
 .nutri-acc.abierta { border-color: var(--accent); }
-.nutri-acc.abierta > .nutri-acc-head { margin-bottom: 12px; }
+.nutri-acc.abierta > .nutri-acc-head { margin-bottom: 16px; }
 .nutri-acc:not(.abierta) > .nutri-acc-body { display: none; }
 .nutri-acc:not(.abierta) { padding-top: 12px; padding-bottom: 12px; }
 .nutri-comida-toggle { flex: 1; min-width: 0; }
