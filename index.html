@@ -912,6 +912,7 @@ const ALIMENTOS_GRUPOS = {
     "Queso 1 lámina (20g)", "Leche líquida 1 taza (200cc)", "Leche en polvo 3 cdas colmadas (20g)",
     "Yogurt 1 unidad (125 a 145g)", "Queso ricotta 2 cdas (30g)", "Queso crema 3 cdas (18g)", "Quesillo rodela de 3cm (60g)",
     "Leche proteica Lonco Leche FullPro chocolate 1 envase (250 ml)",
+    "Yogurt proteico Lonco Leche FullPro frutilla 1 envase (150 g)",
   ],
   lipidos: [
     "Palta 3 cdas (90g)", "Mantequilla de maní 1 cda", "Frutos secos 1 puñado (25 a 30g)", "Nueces 5 unidades",
@@ -1098,6 +1099,9 @@ const MACRO_ALIMENTOS = [
   ["Quesillo", "rodela de 3 cm", 60, 190, 2, 17, 13],
   // Valores de la etiqueta (por 100 ml): 54 kcal · 4,8 g C · 8 g P · 0,3 g L; 1 envase = 250 ml.
   ["Leche proteica Lonco Leche FullPro chocolate", "1 envase 250 ml", 250, 54, 4.8, 8, 0.3],
+  // Yogurt Lonco Leche Protein FullPro frutilla (150 g; "18 g de proteína cada 150 g" en el envase). Por 100 g:
+  // 75 kcal · 5 g C · 12 g P · 0,8 g L → 1 envase = 112,5 kcal · 7,5 g C · 18 g P · 1,2 g L.
+  ["Yogurt proteico Lonco Leche FullPro frutilla", "1 envase 150 g", 150, 75, 5, 12, 0.8],
   ["Palta", "3 cdas", 90, 160, 9, 2, 15],
   ["Mantequilla de maní", "1 cda", 16, 588, 20, 25, 50],
   ["Frutos secos (mix)", "1 puñado", 28, 607, 21, 20, 54],
@@ -1192,6 +1196,7 @@ const MACRO_POR_GRUPO = {
   lacteos: [
     "Queso laminado", "Leche descremada", "Leche en polvo descremada", "Yogurt natural descremado", "Queso ricotta",
     "Queso crema", "Quesillo", "Leche proteica Lonco Leche FullPro chocolate",
+    "Yogurt proteico Lonco Leche FullPro frutilla",
   ],
   lipidos: [
     "Palta", "Mantequilla de maní", "Frutos secos (mix)", "Nueces", "Almendras", "Maní", "Pistachos", "Avellanas",
