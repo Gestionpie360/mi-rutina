@@ -1250,6 +1250,28 @@ function scoopActual() {
 // Productos con valores de su etiqueta: la leche proteica entra como 1 porción de lácteos (y suma a los
 // conteos); la barra suma a los conteos sin usar porciones, igual que el scoop.
 const LECHE_PRO_ALIMENTO = "Leche proteica Lonco Leche FullPro chocolate 1 envase (250 ml)";
+// Leche FullPro de 1 L en vaso de 200 ml o de 250 ml. El vaso de 250 ml equivale a 1,25 porciones de lácteo del
+// plan (1 porción = 200 ml); ese es el valor con que se cuenta cada vez que se elige.
+const LECHE_1L_200 = "Leche proteica Lonco Leche FullPro (1 L) 1 vaso (200 ml)";
+const LECHE_1L_250 = "Leche proteica Lonco Leche FullPro (1 L) 1 vaso (250 ml)";
+const CANTIDAD_POR_ALIMENTO = { [LECHE_1L_250]: 1.25 };
+// "Preparado con" del scoop de una comida. No se guarda aparte: se deduce de la porción de leche vinculada
+// (la que lleva deScoop), así que si se quita esa porción el scoop vuelve a quedar con agua.
+function scoopBaseDe(cm) {
+  const p = (cm.porciones || []).find((x) => x.deScoop);
+  if (!p) return "agua";
+  return p.alimento === LECHE_1L_250 ? "leche250" : p.alimento === LECHE_1L_200 ? "leche200" : "agua";
+}
+function fijarScoopBase(cm, base) {
+  cm.porciones = cm.porciones.filter((p) => !p.deScoop);
+  const alimento = base === "leche250" ? LECHE_1L_250 : base === "leche200" ? LECHE_1L_200 : null;
+  if (alimento) {
+    cm.porciones.push({
+      id: "p_" + Math.random().toString(36).slice(2), grupo: "lacteos", alimento,
+      cantidad: CANTIDAD_POR_ALIMENTO[alimento] || 1, deScoop: true,
+    });
+  }
+}
 const BARRA_PRO_NOMBRE = "Barra Wild Protein chocolate naranja";
 function barraProteinaValores() {
   const b = buscarMacroAlimento(BARRA_PRO_NOMBRE);
@@ -1276,7 +1298,8 @@ function platosReferencia(campo) {
 }
 function fmtPorcion(n) {
   n = Number(n) || 0;
-  return Number.isInteger(n) ? String(n) : n.toFixed(1).replace(".", ",");
+  // hasta 2 decimales sin ceros de sobra: 0,5 · 1,25 · 2,5 (con 1 decimal el 1,25 se veía "1,3")
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100).replace(".", ",");
 }
 function alimentosDelGrupo(grupoId) {
   return (ALIMENTOS_GRUPOS[grupoId] || []).concat((alimentosCustom[grupoId] || []).map((a) => a.nombre));
@@ -1950,6 +1973,26 @@ function renderNutricion() {
           💪 Proteína en polvo (1 scoop) — suma a tus proteínas del día (no usa porciones)
         </label>
       </div>
+      ${cm.proteinaPolvo ? (() => {
+        const base = scoopBaseDe(cm);
+        const lecheV = base === "agua" ? null : macroDePorcion("lacteos", base === "leche250" ? LECHE_1L_250 : LECHE_1L_200);
+        const sc = scoopActual();
+        return `
+      <div class="nutri-item-add">
+        <div>
+          <label style="margin:0 0 4px">Preparado con</label>
+          <select data-scoop-base="${idx}">
+            <option value="agua" ${base === "agua" ? "selected" : ""}>Agua (solo el scoop)</option>
+            <option value="leche250" ${base === "leche250" ? "selected" : ""}>Leche 1 L — vaso 250 ml</option>
+            <option value="leche200" ${base === "leche200" ? "selected" : ""}>Leche 1 L — vaso 200 ml</option>
+          </select>
+          <div class="exercise-meta" style="margin-top:6px">Batido: ${pillsMacro(
+            sc.kcal + (lecheV ? lecheV.kcal : 0), sc.carb + (lecheV ? lecheV.carb : 0),
+            sc.prot + (lecheV ? lecheV.prot : 0), sc.lip + (lecheV ? lecheV.lip : 0))}
+            ${base === "agua" ? "" : `<div style="margin-top:4px">La leche cuenta ${base === "leche250" ? "1,25 porciones" : "1 porción"} de lácteo.</div>`}</div>
+        </div>
+      </div>`;
+      })() : ""}
       <div class="nutri-item-add">
         <div><select data-producto-select="${idx}">
           <option value="">O elige un producto sugerido para tu colación…</option>
@@ -2559,8 +2602,8 @@ function renderNutricion() {
     select.addEventListener("change", async () => {
       if (!select.value) return;
       const [comidaIdx, grupoId] = select.dataset.porcionSelect.split(":");
-      const cantidad = parseFloat(select.dataset.cantidad);
       let nombreAlimento = select.value;
+      const cantidad = CANTIDAD_POR_ALIMENTO[nombreAlimento] || parseFloat(select.dataset.cantidad);
       if (select.value === "__nuevo") {
         const grupo = GRUPOS_NUTRICION.find((g) => g.id === grupoId);
         const nuevo = await modalAlimentoNuevo(grupo.nombre);
@@ -2598,7 +2641,18 @@ function renderNutricion() {
   c.querySelectorAll("[data-proteina-polvo]").forEach((chk) => {
     chk.addEventListener("change", () => {
       const idx = parseInt(chk.dataset.proteinaPolvo, 10);
-      getComidasDelDia(nutricionFecha)[idx].proteinaPolvo = chk.checked;
+      const cm = getComidasDelDia(nutricionFecha)[idx];
+      cm.proteinaPolvo = chk.checked;
+      // Al marcarlo, el scoop va en el vaso de 250 ml de leche (se puede cambiar a agua o a 200 ml);
+      // al desmarcarlo se quita también la leche vinculada.
+      fijarScoopBase(cm, chk.checked ? "leche250" : "agua");
+      persistComidasDias();
+      renderNutricion();
+    });
+  });
+  c.querySelectorAll("[data-scoop-base]").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      fijarScoopBase(getComidasDelDia(nutricionFecha)[parseInt(sel.dataset.scoopBase, 10)], sel.value);
       persistComidasDias();
       renderNutricion();
     });
