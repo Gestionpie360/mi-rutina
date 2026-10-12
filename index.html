@@ -1986,7 +1986,7 @@ function renderNutricion() {
             <option value="leche250" ${base === "leche250" ? "selected" : ""}>Leche 1 L — vaso 250 ml</option>
             <option value="leche200" ${base === "leche200" ? "selected" : ""}>Leche 1 L — vaso 200 ml</option>
           </select>
-          <div class="exercise-meta" style="margin-top:6px">Batido: ${pillsMacro(
+          <div class="exercise-meta" style="margin-top:6px">${base === "agua" ? "Solo el scoop" : "Scoop + leche"} = ${pillsMacro(
             sc.kcal + (lecheV ? lecheV.kcal : 0), sc.carb + (lecheV ? lecheV.carb : 0),
             sc.prot + (lecheV ? lecheV.prot : 0), sc.lip + (lecheV ? lecheV.lip : 0))}
             ${base === "agua" ? "" : `<div style="margin-top:4px">La leche cuenta ${base === "leche250" ? "1,25 porciones" : "1 porción"} de lácteo.</div>`}</div>
