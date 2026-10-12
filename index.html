@@ -942,17 +942,6 @@ const PLANTILLAS_COMIDA = [
     { grupo: "cereales", cant: 1 }, { grupo: "carnes", cant: 2 }, { grupo: "verduras", cant: 1 }, { grupo: "aceites", cant: 0.5 },
   ] },
 ];
-// "Algunas ideas de colaciones" del plan — productos/marcas sugeridos, para el generador de combos.
-const PRODUCTOS_COLACION = [
-  "Soprole Protein+ (leche con cacao, 12g proteína)", "Colun Yoghurt Protein Plus (18g proteína)",
-  "Milo Protein Up (20g proteína, 330ml)", "Surlat Protein Whey (15g proteína, 200ml)",
-  "Watts 100% Fruta (pouch manzana)", "Sanissimo Salmas (galletas de maíz morado)", "Vivo 100% Jugo de pera",
-  "Twenty's (barra de proteína, varios sabores)", "AFE jugo de manzana 95% fruta", "Vivo Frutas Veggie (pouch)",
-  "Tucapel Galletas de Arroz", "Lonco Leche FullPro (18g proteína)", "Lonco Leche Protein Shot (sabor vainilla)",
-  "Lonco Leche Protein Yogurt (14g proteína)", "Nestlé Goodnes Protein (yogurt, 10g proteína)",
-  "+50% Pro Tein (barra chocolate)", "Wild Protein (barra, varios sabores)", "AMA Pura Manzana (jugo orgánico)",
-  "Livean Purfrut (pouch manzana-mango)", "Mizo's (chocolate, 10g proteína)",
-];
 // Minuta de 4 semanas sugerida por la nutricionista (solo referencia, día por día).
 const DIAS_SEMANA = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const MINUTA_SUGERIDA = {
@@ -1236,7 +1225,6 @@ function macrosDePorciones(comidas) {
       tot.kcal += m.kcal; tot.carb += m.carb; tot.prot += m.prot; tot.lip += m.lip;
       contados++;
     });
-    if (cm.productoColacion) sinValores.push(cm.productoColacion);
   });
   return { tot, contados, sinValores: [...new Set(sinValores)] };
 }
@@ -1308,7 +1296,7 @@ function getComidasDelDia(fecha) {
   if (!comidasDias[fecha]) {
     comidasDias[fecha] = PLANTILLAS_COMIDA.map((p) => ({
       id: "m_" + Math.random().toString(36).slice(2), plantillaId: p.id, nombre: p.nombre,
-      porciones: [], proteinaPolvo: false, productoColacion: null, platoSugerido: null,
+      porciones: [], proteinaPolvo: false, platoSugerido: null,
     }));
     persistComidasDias();
   }
@@ -1344,18 +1332,15 @@ function generarComboAleatorio(plantilla) {
       if (elegido) porciones.push({ id: "p_" + Math.random().toString(36).slice(2), grupo: f.grupo, alimento: elegido, cantidad: f.cant });
     }
   });
-  let proteinaPolvo = false, productoColacion = null;
-  if (plantilla.extraProteinaPolvo) {
-    if (Math.random() < 0.5) proteinaPolvo = true;
-    else productoColacion = PRODUCTOS_COLACION[Math.floor(Math.random() * PRODUCTOS_COLACION.length)];
-  }
+  let proteinaPolvo = false;
+  if (plantilla.extraProteinaPolvo && Math.random() < 0.5) proteinaPolvo = true;
   let platoSugerido = null;
   const campoMinuta = PLANTILLA_CAMPO_MINUTA[plantilla.id];
   if (campoMinuta) {
     const platos = platosReferencia(campoMinuta);
     platoSugerido = platos[Math.floor(Math.random() * platos.length)];
   }
-  return { porciones, proteinaPolvo, productoColacion, platoSugerido };
+  return { porciones, proteinaPolvo, platoSugerido };
 }
 function fechaISOMenosDias(fechaISO, n) {
   const [y, m, d] = fechaISO.split("-").map(Number);
@@ -1993,12 +1978,6 @@ function renderNutricion() {
         </div>
       </div>`;
       })() : ""}
-      <div class="nutri-item-add">
-        <div><select data-producto-select="${idx}">
-          <option value="">O elige un producto sugerido para tu colación…</option>
-          ${PRODUCTOS_COLACION.map((p) => `<option value="${esc(p)}" ${cm.productoColacion === p ? "selected" : ""}>${esc(p)}</option>`).join("")}
-        </select></div>
-      </div>
     ` : "";
     const tieneLeche = cm.porciones.some((p) => p.alimento === LECHE_PRO_ALIMENTO);
     const productosHtml = plantilla.extraProductos ? `
@@ -2052,7 +2031,6 @@ function renderNutricion() {
     });
     if (cm.proteinaPolvo) filas.push({ nombre: "💪 Proteína en polvo (1 scoop)", kcal: scoopV.kcal, carb: scoopV.carb, prot: scoopV.prot, lip: scoopV.lip });
     if (cm.barraProteina) filas.push({ nombre: "🍫 Barra Wild Protein (1 unidad, 45 g)", kcal: barraV.kcal, carb: barraV.carb, prot: barraV.prot, lip: barraV.lip });
-    if (cm.productoColacion) filas.push({ nombre: cm.productoColacion, sin: true });
     const iconos = { desayuno: "🌅", colacion_manana: "🍎", almuerzo: "🍽️", colacion_tarde: "🥪", once_cena: "🌙" };
     if (filas.length) seccionesResumen.push({ titulo: cm.nombre, icono: iconos[cm.plantillaId] || "🍴", filas });
   });
@@ -2528,7 +2506,7 @@ function renderNutricion() {
     const plantilla = PLANTILLAS_COMIDA.find((p) => p.id === plantillaId);
     getComidasDelDia(nutricionFecha).push({
       id: "m_" + Math.random().toString(36).slice(2), plantillaId, nombre: plantilla.nombre,
-      porciones: [], proteinaPolvo: false, productoColacion: null, platoSugerido: null,
+      porciones: [], proteinaPolvo: false, platoSugerido: null,
     });
     persistComidasDias();
     renderNutricion();
@@ -2550,7 +2528,7 @@ function renderNutricion() {
       const ok = await modalConfirm("Vaciar comida", "¿Borrar todos los alimentos cargados en esta comida?");
       if (!ok) return;
       const cm = getComidasDelDia(nutricionFecha)[idx];
-      cm.porciones = []; cm.proteinaPolvo = false; cm.productoColacion = null; cm.platoSugerido = null; cm.barraProteina = false;
+      cm.porciones = []; cm.proteinaPolvo = false; cm.platoSugerido = null; cm.barraProteina = false;
       persistComidasDias();
       renderNutricion();
     });
@@ -2567,7 +2545,6 @@ function renderNutricion() {
       const combo = generarComboAleatorio(plantilla);
       cm.porciones = combo.porciones;
       cm.proteinaPolvo = combo.proteinaPolvo;
-      cm.productoColacion = combo.productoColacion;
       cm.platoSugerido = combo.platoSugerido;
       persistComidasDias();
       renderNutricion();
@@ -2655,13 +2632,6 @@ function renderNutricion() {
       fijarScoopBase(getComidasDelDia(nutricionFecha)[parseInt(sel.dataset.scoopBase, 10)], sel.value);
       persistComidasDias();
       renderNutricion();
-    });
-  });
-  c.querySelectorAll("[data-producto-select]").forEach((sel) => {
-    sel.addEventListener("change", () => {
-      const idx = parseInt(sel.dataset.productoSelect, 10);
-      getComidasDelDia(nutricionFecha)[idx].productoColacion = sel.value || null;
-      persistComidasDias();
     });
   });
 }
