@@ -184,6 +184,11 @@ textarea { resize: vertical; min-height: 60px; }
 .exercise-name { flex: 1; font-weight: 600; font-size: .92rem; }
 .exercise-name-input { flex: 1; margin: 0; padding: 6px 8px; font-size: .9rem; }
 .exercise-meta { font-size: .78rem; color: var(--text-dim); margin-top: 4px; }
+/* Resumen del scoop (Preparado con…): título, etiquetas y nota con el mismo ritmo vertical (8 px). */
+.scoop-resumen { margin: 0 0 6px; } /* el select ya trae su margen inferior (12 px); abajo separa del siguiente bloque */
+.scoop-resumen-tit { font-size: .8rem; font-weight: 600; color: var(--text-dim); line-height: 1.3; }
+.scoop-resumen-pills { margin-top: 8px; }
+.scoop-resumen-nota { margin-top: 8px; font-size: .78rem; color: var(--text-dim); line-height: 1.4; }
 .iso-toggle { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--text-dim); margin-top: 6px; cursor: pointer; }
 .iso-toggle input { width: auto; margin: 0; }
 .iso-badge { font-size: .72rem; font-weight: 600; color: var(--accent); margin-left: 6px; white-space: nowrap; }
@@ -1971,10 +1976,13 @@ function renderNutricion() {
             <option value="leche250" ${base === "leche250" ? "selected" : ""}>Leche 1 L — vaso 250 ml</option>
             <option value="leche200" ${base === "leche200" ? "selected" : ""}>Leche 1 L — vaso 200 ml</option>
           </select>
-          <div class="exercise-meta" style="margin-top:6px">${base === "agua" ? "Solo el scoop" : "Scoop + leche"} = ${pillsMacro(
-            sc.kcal + (lecheV ? lecheV.kcal : 0), sc.carb + (lecheV ? lecheV.carb : 0),
-            sc.prot + (lecheV ? lecheV.prot : 0), sc.lip + (lecheV ? lecheV.lip : 0))}
-            ${base === "agua" ? "" : `<div style="margin-top:4px">La leche cuenta ${base === "leche250" ? "1,25 porciones" : "1 porción"} de lácteo.</div>`}</div>
+          <div class="scoop-resumen">
+            <div class="scoop-resumen-tit">${base === "agua" ? "Solo el scoop" : "Scoop + leche"} =</div>
+            <div class="scoop-resumen-pills">${pillsMacro(
+              sc.kcal + (lecheV ? lecheV.kcal : 0), sc.carb + (lecheV ? lecheV.carb : 0),
+              sc.prot + (lecheV ? lecheV.prot : 0), sc.lip + (lecheV ? lecheV.lip : 0))}</div>
+            ${base === "agua" ? "" : `<div class="scoop-resumen-nota">La leche cuenta ${base === "leche250" ? "1,25 porciones" : "1 porción"} de lácteo.</div>`}
+          </div>
         </div>
       </div>`;
       })() : ""}
